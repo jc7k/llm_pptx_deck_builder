@@ -122,15 +122,81 @@ Proceeding with presentation creation despite validation warnings...
 
 ## Architecture
 
-### Core Pipeline
+### LangGraph Workflow Architecture
 
-1. **Research Phase**: Brave Search API gathers current, authoritative sources
-2. **Document Loading**: LangChain WebBaseLoader fetches and parses web content  
-3. **Knowledge Indexing**: LlamaIndex creates vector embeddings for RAG
-4. **Outline Generation**: LLM creates structured slide outline from research
-5. **Content Generation**: Per-slide content with bullet points, notes, and citations
-6. **Quality Validation**: Complete thought validation and formatting checks
-7. **Presentation Creation**: python-pptx renders professional PowerPoint output
+The system implements a **6-node LangGraph workflow** with proper state management:
+
+```
+START → research → load_docs → create_index → generate_outline → generate_content → create_presentation → END
+```
+
+#### Node Implementations
+
+1. **Research Node** (`research_node`)
+   - Uses Brave Search API for current information
+   - Returns structured search results with URLs, titles, snippets
+   - Error handling with empty results fallback
+
+2. **Document Loading Node** (`document_loading_node`)
+   - LangChain WebBaseLoader for content extraction
+   - BeautifulSoup4 + html2text for clean text parsing
+   - Rate limiting and respectful crawling
+
+3. **Indexing Node** (`indexing_node`)
+   - LlamaIndex VectorStoreIndex creation
+   - OpenAI embeddings with configurable chunk size
+   - Metadata tracking for query engine optimization
+
+4. **Outline Generation Node** (`outline_generation_node`)
+   - RAG-based outline generation using vector store
+   - Two-phase prompting: research → structured JSON
+   - Fallback outline for JSON parsing failures
+
+5. **Content Generation Node** (`content_generation_node`)
+   - Per-slide content generation with RAG queries
+   - Citation tracking with inline reference markers
+   - Structured JSON output with bullets and speaker notes
+
+6. **Presentation Creation Node** (`presentation_creation_node`)
+   - Python-PPTX rendering with template support
+   - Professional slide layouts and formatting
+   - Automatic references slide generation
+
+### State Management
+
+```python
+class DeckBuilderState(TypedDict):
+    messages: List[AnyMessage]
+    user_request: str
+    search_results: List[Dict]
+    documents: List[Dict]
+    vector_index: Optional[Dict]
+    outline: Optional[Dict]
+    slide_specs: List[Dict]
+    references: List[str]
+    template_path: Optional[str]
+    output_path: str
+    status: str
+```
+
+### Tool Implementations
+
+All tools use the `@tool` decorator pattern:
+
+```python
+@tool
+def search_web(query: str, count: int = 10) -> List[Dict]:
+    """Search web using Brave Search API for current information."""
+    # Implementation with error handling, rate limiting
+```
+
+**Core Tools:**
+- `search_web`: Brave Search API integration
+- `load_web_documents`: LangChain WebBaseLoader
+- `create_vector_index`: LlamaIndex vector store creation
+- `generate_outline`: RAG-based outline generation
+- `generate_slide_content`: RAG-based slide content
+- `create_presentation`: Python-PPTX rendering
 
 ### Key Components
 
@@ -151,8 +217,27 @@ BRAVE_API_KEY=brv-************************  # Brave Search API
 OPENAI_API_KEY=sk-************************   # OpenAI GPT models
 
 # Optional Settings
-OPENAI_MODEL=gpt-4o                         # Default: gpt-4o  
+OPENAI_MODEL=gpt-4o-mini                    # Default: gpt-4o-mini  
 USER_AGENT=llm-pptx-deck-builder/1.0        # For web scraping
+
+# Optional: LangSmith Tracing
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=ls__************************
+
+# Model Configuration
+EMBEDDING_MODEL=text-embedding-3-small
+```
+
+### Advanced Configuration
+
+```python
+# src/settings.py - Default values
+max_search_results: int = 15        # Maximum search results to process
+max_documents: int = 20             # Maximum documents to load
+chunk_size: int = 1000              # Text chunk size for indexing
+chunk_overlap: int = 200            # Text chunk overlap
+similarity_top_k: int = 10          # Top K results for similarity search
+default_output_dir: str = "output"  # Default output directory
 ```
 
 ### Rate Limiting
@@ -184,7 +269,34 @@ Production-ready rate limiting is implemented for all APIs:
 
 ## Development
 
-### Testing
+### Testing Strategy
+
+#### Unit Tests with FakeLLM
+
+The project uses comprehensive testing with FakeLLM for development:
+
+```python
+@pytest.fixture
+def fake_llm():
+    responses = [
+        '{"topic": "AI in Education", "objective": "Overview...", "slide_titles": [...]}',
+        '{"title": "Introduction", "bullets": [...], "speaker_notes": "..."}'
+    ]
+    return FakeLLM(responses=responses)
+```
+
+#### Mock Patterns for APIs
+
+```python
+@patch('src.tools.requests.get')
+def test_search_web_success(self, mock_get, mock_api_keys):
+    mock_response = Mock()
+    mock_response.json.return_value = {"web": {"results": [...]}}
+    mock_get.return_value = mock_response
+    # Test implementation
+```
+
+### Testing Commands
 
 ```bash
 # Run all tests
@@ -199,6 +311,9 @@ uv run python test_validation_only.py
 # Code quality checks
 uv run ruff check .
 uv run ruff check --fix .
+
+# Full validation suite
+python validate.py
 ```
 
 ### Project Structure
@@ -218,6 +333,33 @@ tests/
 └── test_integration.py     # End-to-end tests
 ```
 
+## Performance & Security
+
+### Performance Features
+- **Streaming**: Real-time status updates during generation
+- **Caching**: LlamaIndex vector store persistence
+- **Rate Limiting**: Respectful API usage with backoff strategies
+- **Memory Management**: Efficient document chunking and indexing
+
+### Error Handling
+- **Graceful Degradation**: Continues workflow even with partial failures
+- **Retry Logic**: Automatic retry for transient API failures
+- **Fallback Content**: Default outline/content when AI generation fails
+- **Validation**: Input sanitization and output schema validation
+
+### Security Implementation
+
+#### API Key Management
+- Environment variable storage (never in code)
+- Pydantic validation on startup
+- Secure error messages (no key exposure)
+
+#### Input Validation
+- User prompt sanitization
+- Search result count limits
+- JSON schema validation with Pydantic
+- File path validation for templates
+
 ## Advanced Usage
 
 ### Custom Templates
@@ -230,7 +372,11 @@ python deck_builder_cli.py \
   --template templates/corporate_theme.pptx
 ```
 
-### API Integration
+- Inherits slide masters, themes, and branding
+- Maintains corporate design consistency
+- Supports all standard PowerPoint template features
+
+### Programmatic Integration
 
 The system can be integrated into other applications:
 
@@ -244,7 +390,23 @@ agent = DeckBuilderAgent(deps)
 
 # Generate presentation
 result = agent.generate_deck("Market Analysis 2025")
-print(f"Generated: {result['output_file']}")
+if result["success"]:
+    print(f"Generated: {result['output_path']}")
+    print(f"Slides: {result['slide_count']}")
+    print(f"References: {result['references_count']}")
+```
+
+### Advanced CLI Usage
+
+```bash
+# Basic presentation generation
+python deck_builder_cli.py --topic "Digital transformation in healthcare"
+
+# Advanced usage with template and custom output
+python deck_builder_cli.py \
+  --topic "Sustainable energy solutions for small businesses" \
+  --template corporate_template.pptx \
+  --output sustainability_deck.pptx
 ```
 
 ## Requirements
@@ -265,6 +427,37 @@ MIT License - see LICENSE file for details.
 2. Create a feature branch
 3. Add tests for new functionality
 4. Submit a pull request
+
+## Troubleshooting
+
+### Common Issues
+
+1. **API Key Errors**: Verify `.env` file setup with correct key formats
+2. **Import Errors**: Run `uv sync` to install all dependencies
+3. **Test Failures**: Run `python validate.py` for comprehensive diagnostics
+4. **Template Issues**: Ensure `.pptx` file format and file accessibility
+5. **Rate Limiting**: If you get rate limit errors, the system will automatically retry with backoff
+
+### Validation Commands
+
+```bash
+python validate.py          # Full validation suite
+python deck_builder_cli.py --help  # CLI help and options
+uv run pytest tests/ -v     # Run all tests with verbose output
+uv run ruff check .         # Code quality check
+```
+
+### Debug Mode
+
+For detailed debugging information:
+
+```bash
+# Enable verbose logging
+LANGCHAIN_TRACING_V2=true python deck_builder_cli.py --topic "Your topic"
+
+# Run with maximum verbosity
+python deck_builder_cli.py --topic "Your topic" --verbose
+```
 
 ## Support
 
