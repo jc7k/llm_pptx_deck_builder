@@ -46,78 +46,78 @@ Here's what you'll see when generating a presentation:
 
 ```bash
 $ python deck_builder_cli.py --topic "AI impact on job market trends 2025"
-=€ Starting presentation generation for: AI impact on job market trends 2025
+ğŸš€ Starting presentation generation for: AI impact on job market trends 2025
 This may take several minutes...
-[11:01:38] = RESEARCH: Starting web search for: AI impact on job market trends 2025
-[11:01:38] = RESEARCH: Applying rate limiting for Brave Search API...
-[11:01:38] = RESEARCH: Enhanced search query: AI impact on job market trends 2025 statistics data trends 2025 report analysis...
-[11:01:38] = RESEARCH: Querying Brave Search API...
-[11:01:41] = RESEARCH:  Found 15 search results
-[11:01:41] = RESEARCH: Top sources: https://www.nexford.edu/insights/how-will-ai-affect-jobs, https://thehill.com/policy/technology/5460357-ai-impact-on-job-market/, https://www.gartner.com/en/articles/hype-cycle-for-artificial-intelligence, https://id-times.com/finance/2025-job-market/, https://www.stlouisfed.org/on-the-economy/2025/aug/recent-college-grads-bear-brunt-labor-market-shifts
-[11:01:41] =Ä DOCUMENTS: Processing 15 search results...
-[11:01:41] =Ä DOCUMENTS: Extracting URLs from search results...
-[11:01:41] =Ä DOCUMENTS: Found 15 URLs to process
-[11:01:41] =Ä DOCUMENTS: Starting document loading with rate limiting...
-[11:01:55] =Ä DOCUMENTS:  Successfully loaded 14 documents
-[11:01:55] =Ä DOCUMENTS: Total content: 226,564 characters
-[11:01:55] >à INDEXING: Creating vector index from 14 documents...
-[11:01:55] >à INDEXING: Converting documents to LlamaIndex format...
-[11:01:55] >à INDEXING: Building vector embeddings with OpenAI...
-[11:01:57] >à INDEXING:  Vector index created: 14 docs, 66 chunks
-[11:01:57] >à INDEXING: Index ID: deck_builder_1756231317
-[11:01:57] =Ë OUTLINE: Generating presentation outline for: AI impact on job market trends 2025
-[11:01:57] =Ë OUTLINE: Querying vector index for relevant content...
-[11:01:57] =Ë OUTLINE: Applying rate limiting for OpenAI API...
-[11:02:21] =Ë OUTLINE:  Generated outline with 11 slides
-[11:02:21] =Ë OUTLINE: Slides: Title Slide, Agenda, Introduction, Key Concepts, Current Trends...
-[11:02:21] =Ë OUTLINE: Estimated duration: 15 minutes
-[11:02:21] =İ CONTENT: Generating detailed content for 11 slides...
-[11:02:21] =İ CONTENT: Querying vector index for slide-specific content...
-[11:02:21] =İ CONTENT: Applying rate limiting for OpenAI API...
-[11:02:21] =İ CONTENT: Processing slides with RAG-based content generation...
+[11:01:38] ğŸ” RESEARCH: Starting web search for: AI impact on job market trends 2025
+[11:01:38] ğŸ” RESEARCH: Applying rate limiting for Brave Search API...
+[11:01:38] ğŸ” RESEARCH: Enhanced search query: AI impact on job market trends 2025 statistics data trends 2025 report analysis...
+[11:01:38] ğŸ” RESEARCH: Querying Brave Search API...
+[11:01:41] ğŸ” RESEARCH: âœ… Found 15 search results
+[11:01:41] ğŸ” RESEARCH: Top sources: https://www.nexford.edu/insights/how-will-ai-affect-jobs, https://thehill.com/policy/technology/5460357-ai-impact-on-job-market/, https://www.gartner.com/en/articles/hype-cycle-for-artificial-intelligence, https://id-times.com/finance/2025-job-market/, https://www.stlouisfed.org/on-the-economy/2025/aug/recent-college-grads-bear-brunt-labor-market-shifts
+[11:01:41] ğŸ“„ DOCUMENTS: Processing 15 search results...
+[11:01:41] ğŸ“„ DOCUMENTS: Extracting URLs from search results...
+[11:01:41] ğŸ“„ DOCUMENTS: Found 15 URLs to process
+[11:01:41] ğŸ“„ DOCUMENTS: Starting document loading with rate limiting...
+[11:01:55] ğŸ“„ DOCUMENTS: âœ… Successfully loaded 14 documents
+[11:01:55] ğŸ“„ DOCUMENTS: Total content: 226,564 characters
+[11:01:55] ğŸ§  INDEXING: Creating vector index from 14 documents...
+[11:01:55] ğŸ§  INDEXING: Converting documents to LlamaIndex format...
+[11:01:55] ğŸ§  INDEXING: Building vector embeddings with OpenAI...
+[11:01:57] ğŸ§  INDEXING: âœ… Vector index created: 14 docs, 66 chunks
+[11:01:57] ğŸ§  INDEXING: Index ID: deck_builder_1756231317
+[11:01:57] ğŸ“‹ OUTLINE: Generating presentation outline for: AI impact on job market trends 2025
+[11:01:57] ğŸ“‹ OUTLINE: Querying vector index for relevant content...
+[11:01:57] ğŸ“‹ OUTLINE: Applying rate limiting for OpenAI API...
+[11:02:21] ğŸ“‹ OUTLINE: âœ… Generated outline with 11 slides
+[11:02:21] ğŸ“‹ OUTLINE: Slides: Title Slide, Agenda, Introduction, Key Concepts, Current Trends...
+[11:02:21] ğŸ“‹ OUTLINE: Estimated duration: 15 minutes
+[11:02:21] ğŸ“ CONTENT: Generating detailed content for 11 slides...
+[11:02:21] ğŸ“ CONTENT: Querying vector index for slide-specific content...
+[11:02:21] ğŸ“ CONTENT: Applying rate limiting for OpenAI API...
+[11:02:21] ğŸ“ CONTENT: Processing slides with RAG-based content generation...
 Creating content allocation plan to eliminate repetition...
- Generated slide: Introduction ’ AI Market Growth Projections to 2025
- Generated slide: Key Concepts ’ Surge in AI Adoption Amid Labor Shortages
- Generated slide: Current Trends ’ Global AI Adoption in Healthcare and Workplaces
- Generated slide: Applications ’ AI's Economic Impact: Jobs and Revenue Growth
- Generated slide: Challenges ’ Global Workforce Impact of AI Distrust
- Generated slide: Future Outlook ’ AI's Economic Impact and Job Growth by 2030
- Generated slide: Conclusions ’ AI Market Growth and Workforce Concerns
- Generated slide: Next Steps ’ Building Trust and Skills for AI Success
+âœ… Generated slide: Introduction â†’ AI Market Growth Projections to 2025
+âœ… Generated slide: Key Concepts â†’ Surge in AI Adoption Amid Labor Shortages
+âœ… Generated slide: Current Trends â†’ Global AI Adoption in Healthcare and Workplaces
+âœ… Generated slide: Applications â†’ AI's Economic Impact: Jobs and Revenue Growth
+âœ… Generated slide: Challenges â†’ Global Workforce Impact of AI Distrust
+âœ… Generated slide: Future Outlook â†’ AI's Economic Impact and Job Growth by 2030
+âœ… Generated slide: Conclusions â†’ AI Market Growth and Workforce Concerns
+âœ… Generated slide: Next Steps â†’ Building Trust and Skills for AI Success
 Successfully generated 8 unique slides with no content repetition
-[11:03:48] =İ CONTENT:  Generated content for 8 slides
-[11:03:48] =İ CONTENT: Collecting and processing citations...
-[11:03:48] =İ CONTENT: Slide 1: 3 citations
-[11:03:48] =İ CONTENT: Slide 2: 3 citations
-[11:03:48] =İ CONTENT: Slide 3: 3 citations
-[11:03:48] =İ CONTENT: Slide 4: 3 citations
-[11:03:48] =İ CONTENT: Slide 5: 3 citations
-[11:03:48] =İ CONTENT: Slide 6: 3 citations
-[11:03:48] =İ CONTENT: Slide 7: 3 citations
-[11:03:48] =İ CONTENT: Slide 8: 3 citations
-[11:03:48] =İ CONTENT: Total citations before deduplication: 24
-[11:03:48] =İ CONTENT: Deduplicating citations...
-[11:03:48] =İ CONTENT:  Final unique citations: 3
-[11:03:48] =İ CONTENT: Generated 24 total bullet points across all slides
-[11:03:48] <¨ PRESENTATION: Creating PowerPoint file with 8 slides...
-[11:03:48] <¨ PRESENTATION: Using default PowerPoint template
-[11:03:48] <¨ PRESENTATION: Including 3 references
-[11:03:48] <¨ PRESENTATION: Initializing python-pptx presentation...
-[11:03:48] <¨ PRESENTATION: Rendering title slide...
-[11:03:48] <¨ PRESENTATION: Processing content slides...
+[11:03:48] ğŸ“ CONTENT: âœ… Generated content for 8 slides
+[11:03:48] ğŸ“ CONTENT: Collecting and processing citations...
+[11:03:48] ğŸ“ CONTENT: Slide 1: 3 citations
+[11:03:48] ğŸ“ CONTENT: Slide 2: 3 citations
+[11:03:48] ğŸ“ CONTENT: Slide 3: 3 citations
+[11:03:48] ğŸ“ CONTENT: Slide 4: 3 citations
+[11:03:48] ğŸ“ CONTENT: Slide 5: 3 citations
+[11:03:48] ğŸ“ CONTENT: Slide 6: 3 citations
+[11:03:48] ğŸ“ CONTENT: Slide 7: 3 citations
+[11:03:48] ğŸ“ CONTENT: Slide 8: 3 citations
+[11:03:48] ğŸ“ CONTENT: Total citations before deduplication: 24
+[11:03:48] ğŸ“ CONTENT: Deduplicating citations...
+[11:03:48] ğŸ“ CONTENT: âœ… Final unique citations: 3
+[11:03:48] ğŸ“ CONTENT: Generated 24 total bullet points across all slides
+[11:03:48] ğŸ¨ PRESENTATION: Creating PowerPoint file with 8 slides...
+[11:03:48] ğŸ¨ PRESENTATION: Using default PowerPoint template
+[11:03:48] ğŸ¨ PRESENTATION: Including 3 references
+[11:03:48] ğŸ¨ PRESENTATION: Initializing python-pptx presentation...
+[11:03:48] ğŸ¨ PRESENTATION: Rendering title slide...
+[11:03:48] ğŸ¨ PRESENTATION: Processing content slides...
 Running final presentation validation...
-L Presentation validation failed:
+âŒ Presentation validation failed:
   - Similar content detected: 'Global AI market projected between $244 billion and $757.6 billion by 2025' and 'AI market projected to reach $190 billion by 2025'
   - Similar content detected: 'AI to add over $15 trillion to global revenue by 2030' and 'AI expected to contribute over $15 trillion to global revenue by 2030'
   - Similar content detected: 'AI market projected to reach $2.4 trillion by 2032' and 'AI market projected to reach $190 billion by 2025'
 Proceeding with presentation creation despite validation warnings...
-[11:03:48] <¨ PRESENTATION:  Presentation saved to: output/AI Market Growth Projections to 2025_20250826_110348.pptx
-[11:03:48] <¨ PRESENTATION: File size: 0.0 MB
-[11:03:48] <¨ PRESENTATION: <‰ Presentation generation complete!
- Presentation generated successfully!
-=Ä Output file: output/AI Market Growth Projections to 2025_20250826_110348.pptx
-<¯ Slides created: 8
-=Ú References included: 3
+[11:03:48] ğŸ¨ PRESENTATION: âœ… Presentation saved to: output/AI Market Growth Projections to 2025_20250826_110348.pptx
+[11:03:48] ğŸ¨ PRESENTATION: File size: 0.0 MB
+[11:03:48] ğŸ¨ PRESENTATION: ğŸ‰ Presentation generation complete!
+âœ… Presentation generated successfully!
+ğŸ“„ Output file: output/AI Market Growth Projections to 2025_20250826_110348.pptx
+ğŸ¯ Slides created: 8
+ğŸ“š References included: 3
 ```
 
 ## Architecture
@@ -205,17 +205,17 @@ uv run ruff check --fix .
 
 ```
 src/
-   deck_builder_agent.py    # Main LangGraph workflow
-   tools.py                 # Core generation and validation logic  
-   models.py                # Pydantic data models
-   dependencies.py          # LlamaIndex and API setup
-   settings.py              # Environment configuration
-   rate_limiter.py          # API rate limiting utilities
+â”œâ”€â”€ deck_builder_agent.py    # Main LangGraph workflow
+â”œâ”€â”€ tools.py                 # Core generation and validation logic  
+â”œâ”€â”€ models.py                # Pydantic data models
+â”œâ”€â”€ dependencies.py          # LlamaIndex and API setup
+â”œâ”€â”€ settings.py              # Environment configuration
+â””â”€â”€ rate_limiter.py          # API rate limiting utilities
 
 tests/
-   test_agent.py           # Agent workflow tests
-   test_tools.py           # Tool function tests
-   test_integration.py     # End-to-end tests
+â”œâ”€â”€ test_agent.py           # Agent workflow tests
+â”œâ”€â”€ test_tools.py           # Tool function tests
+â””â”€â”€ test_integration.py     # End-to-end tests
 ```
 
 ## Advanced Usage
