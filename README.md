@@ -198,6 +198,10 @@ def search_web(query: str, count: int = 10) -> List[Dict]:
 - `generate_slide_content`: RAG-based slide content
 - `create_presentation`: Python-PPTX rendering
 
+## Contributing
+
+Interested in contributing? Please read the contribution guide at [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ### Key Components
 
 - **Brave Search API**: Web search for current information with rate limiting

@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     user_agent: Optional[str] = Field(
         default=None, description="User agent string for HTTP requests"
     )
+    verify_ssl: bool = Field(
+        default=True, description="Verify SSL certificates for HTTP requests"
+    )
 
     class Config:
         """Pydantic configuration."""
