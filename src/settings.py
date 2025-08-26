@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     default_output_dir: str = Field(
         default="output", description="Default output directory"
     )
-    
+
     # HTTP Configuration
     user_agent: Optional[str] = Field(
         default=None, description="User agent string for HTTP requests"
@@ -62,6 +62,7 @@ class Settings(BaseSettings):
 # Global settings instance - lazy loaded
 _settings = None
 
+
 def get_settings() -> Settings:
     """Get or create the global settings instance."""
     global _settings
@@ -69,12 +70,14 @@ def get_settings() -> Settings:
         _settings = Settings()
     return _settings
 
+
 # For backward compatibility, create a property-like access
 class SettingsProxy:
     def __getattr__(self, name):
         return getattr(get_settings(), name)
-    
+
     def __setattr__(self, name, value):
         setattr(get_settings(), name, value)
+
 
 settings = SettingsProxy()

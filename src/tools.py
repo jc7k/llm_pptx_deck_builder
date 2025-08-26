@@ -22,7 +22,6 @@ from .rate_limiter import (
     brave_limiter,
     openai_limiter,
     web_limiter,
-    exponential_backoff_retry,
 )
 
 # Global storage for non-serializable objects
@@ -32,24 +31,24 @@ _vector_index_store = {}
 def _create_robust_session() -> requests.Session:
     """Create a requests session with retry strategy and SSL handling."""
     session = requests.Session()
-    
+
     # Retry strategy
     retry_strategy = Retry(
         total=3,
         backoff_factor=1,
         status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "OPTIONS"]
+        allowed_methods=["HEAD", "GET", "OPTIONS"],
     )
-    
+
     adapter = HTTPAdapter(max_retries=retry_strategy)
     session.mount("http://", adapter)
     session.mount("https://", adapter)
-    
+
     # Set reasonable timeouts and headers
-    session.headers.update({
-        'User-Agent': settings.user_agent or 'LLM-PPTX-Deck-Builder/1.0'
-    })
-    
+    session.headers.update(
+        {"User-Agent": settings.user_agent or "LLM-PPTX-Deck-Builder/1.0"}
+    )
+
     return session
 
 
@@ -67,7 +66,7 @@ def search_web(query: str, count: int = 10) -> List[Dict]:
     try:
         # Rate limiting
         brave_limiter.wait_if_needed("brave_search")
-        
+
         url = "https://api.search.brave.com/res/v1/web/search"
         headers = get_brave_search_headers()
 
@@ -90,7 +89,7 @@ def search_web(query: str, count: int = 10) -> List[Dict]:
             except requests.exceptions.RequestException as e:
                 if attempt == max_retries:
                     raise e
-                wait_time = (2 ** attempt) + (0.5 * random.random())
+                wait_time = (2**attempt) + (0.5 * random.random())
                 time.sleep(wait_time)
 
         data = response.json()
@@ -135,20 +134,22 @@ def load_web_documents(urls: List[str]) -> List[Dict]:
             try:
                 # Rate limiting for web scraping
                 web_limiter.wait_if_needed("web_scraping")
-                
+
                 # Configure WebBaseLoader with SSL settings
                 import urllib3
+
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-                
+
                 loader = WebBaseLoader(
                     url,
                     requests_kwargs={
-                        'verify': False,  # Disable SSL verification for problematic sites
-                        'timeout': 30,
-                        'headers': {
-                            'User-Agent': settings.user_agent or 'LLM-PPTX-Deck-Builder/1.0'
-                        }
-                    }
+                        "verify": False,  # Disable SSL verification for problematic sites
+                        "timeout": 30,
+                        "headers": {
+                            "User-Agent": settings.user_agent
+                            or "LLM-PPTX-Deck-Builder/1.0"
+                        },
+                    },
                 )
                 docs = loader.load()
 
@@ -156,7 +157,7 @@ def load_web_documents(urls: List[str]) -> List[Dict]:
                     # Skip documents with minimal content
                     if len(doc.page_content.strip()) < 100:
                         continue
-                        
+
                     web_doc = WebDocument(
                         url=url,
                         title=doc.metadata.get("title", ""),
@@ -244,7 +245,7 @@ def generate_outline(topic: str, index_metadata: Dict) -> Dict:
         index_id = index_metadata.get("index_id")
         if not index_id:
             return {"error": "No index ID provided"}
-        
+
         index = _vector_index_store.get(index_id)
         if not index:
             return {"error": "Vector index not found in store"}
@@ -328,114 +329,196 @@ def generate_outline(topic: str, index_metadata: Dict) -> Dict:
 
 def validate_thought_completeness(bullets: List[str]) -> Tuple[bool, List[str]]:
     """Validate bullet point thought completeness and formatting.
-    
+
     Focuses on complete thoughts rather than complete sentences.
-    
+
     Returns:
         Tuple of (is_valid, list_of_issues)
     """
     issues = []
-    
+
     for i, bullet in enumerate(bullets):
         # Check word count (flexible range based on thought complexity)
         word_count = len(bullet.split())
         if word_count > 15:  # Increased from 12 to allow complete thoughts
-            issues.append(f"Bullet {i+1}: {word_count} words (max 15): '{bullet[:50]}...'")
-        
+            issues.append(
+                f"Bullet {i+1}: {word_count} words (max 15): '{bullet[:50]}...'"
+            )
+
         # Check for markdown formatting
         if "**" in bullet or "__" in bullet or "*" in bullet:
             issues.append(f"Bullet {i+1}: Contains markdown formatting: '{bullet}'")
-        
+
         # Check minimum length (too short bullets are often generic)
         if word_count < 4:
             issues.append(f"Bullet {i+1}: Too short ({word_count} words): '{bullet}'")
-        
+
         # Enhanced incomplete thought detection
         bullet_lower = bullet.lower().strip()
-        
+
         # Prepositions that indicate incomplete thoughts
         incomplete_prepositions = [
-            " through", " via", " by", " due to", " such as", " including",
-            " with", " from", " for", " in", " on", " at", " of", " to",
-            " within", " across", " among", " between", " during", " since",
-            " until", " after", " before", " around", " under", " over"
+            " through",
+            " via",
+            " by",
+            " due to",
+            " such as",
+            " including",
+            " with",
+            " from",
+            " for",
+            " in",
+            " on",
+            " at",
+            " of",
+            " to",
+            " within",
+            " across",
+            " among",
+            " between",
+            " during",
+            " since",
+            " until",
+            " after",
+            " before",
+            " around",
+            " under",
+            " over",
         ]
-        
+
         # Conjunctions that indicate incomplete thoughts
         incomplete_conjunctions = [
-            " and", " or", " but", " so", " yet", " however", " while",
-            " whereas", " although", " because", " since", " if", " when",
-            " where", " who", " which", " that"
+            " and",
+            " or",
+            " but",
+            " so",
+            " yet",
+            " however",
+            " while",
+            " whereas",
+            " although",
+            " because",
+            " since",
+            " if",
+            " when",
+            " where",
+            " who",
+            " which",
+            " that",
         ]
-        
+
         # Articles and incomplete phrases that indicate cut-offs
         incomplete_articles = [
-            " the", " a", " an", " some", " many", " most", " all",
-            " these", " those", " this", " that"
+            " the",
+            " a",
+            " an",
+            " some",
+            " many",
+            " most",
+            " all",
+            " these",
+            " those",
+            " this",
+            " that",
         ]
-        
+
         # Special case: "is" often indicates incomplete thought
         if bullet_lower.endswith(" is"):
             issues.append(f"Bullet {i+1}: Incomplete - ends with 'is': '{bullet}'")
-        
+
         # Check for incomplete endings
-        if any(bullet_lower.endswith(indicator) for indicator in incomplete_prepositions):
-            issues.append(f"Bullet {i+1}: Incomplete - ends with preposition: '{bullet}'")
-        
-        if any(bullet_lower.endswith(indicator) for indicator in incomplete_conjunctions):
-            issues.append(f"Bullet {i+1}: Incomplete - ends with conjunction: '{bullet}'")
-            
+        if any(
+            bullet_lower.endswith(indicator) for indicator in incomplete_prepositions
+        ):
+            issues.append(
+                f"Bullet {i+1}: Incomplete - ends with preposition: '{bullet}'"
+            )
+
+        if any(
+            bullet_lower.endswith(indicator) for indicator in incomplete_conjunctions
+        ):
+            issues.append(
+                f"Bullet {i+1}: Incomplete - ends with conjunction: '{bullet}'"
+            )
+
         if any(bullet_lower.endswith(indicator) for indicator in incomplete_articles):
             issues.append(f"Bullet {i+1}: Incomplete - ends with article: '{bullet}'")
-        
+
         # Check for truncation patterns
         if bullet.endswith("...") or bullet.endswith(".."):
             issues.append(f"Bullet {i+1}: Appears truncated with ellipsis: '{bullet}'")
-            
+
         # Check for incomplete sentences that don't have main concepts
-        if (not any(char.isdigit() for char in bullet) and 
-            "%" not in bullet and 
-            "$" not in bullet and 
-            len(bullet.split()) > 8 and
-            not any(word in bullet_lower for word in ["increase", "decrease", "growth", "decline", "rise", "fall", "boost", "drop", "gain", "loss"])):
+        if (
+            not any(char.isdigit() for char in bullet)
+            and "%" not in bullet
+            and "$" not in bullet
+            and len(bullet.split()) > 8
+            and not any(
+                word in bullet_lower
+                for word in [
+                    "increase",
+                    "decrease",
+                    "growth",
+                    "decline",
+                    "rise",
+                    "fall",
+                    "boost",
+                    "drop",
+                    "gain",
+                    "loss",
+                ]
+            )
+        ):
             # Long bullet without specific data or action words might be incomplete
             if bullet_lower.count(" ") > 10:  # More than 10 spaces = very long
-                issues.append(f"Bullet {i+1}: Potentially incomplete - long without specific data: '{bullet[:50]}...'")
-        
+                issues.append(
+                    f"Bullet {i+1}: Potentially incomplete - long without specific data: '{bullet[:50]}...'"
+                )
+
         # Check for common incomplete patterns
         incomplete_patterns = [
-            "organizations should", "companies need to", "it is important to",
-            "there are many", "some of the", "one of the", "according to",
-            "research shows that", "studies indicate", "experts believe"
+            "organizations should",
+            "companies need to",
+            "it is important to",
+            "there are many",
+            "some of the",
+            "one of the",
+            "according to",
+            "research shows that",
+            "studies indicate",
+            "experts believe",
         ]
-        
+
         for pattern in incomplete_patterns:
             if bullet_lower.startswith(pattern) and len(bullet.split()) < 10:
-                issues.append(f"Bullet {i+1}: Generic/incomplete start pattern: '{bullet}'")
-    
+                issues.append(
+                    f"Bullet {i+1}: Generic/incomplete start pattern: '{bullet}'"
+                )
+
     return len(issues) == 0, issues
 
 
 def optimize_slide_title(slide_data: Dict) -> Dict:
     """Optimize slide title based on actual bullet content for better alignment.
-    
+
     Args:
         slide_data: Slide with title and bullets
-        
+
     Returns:
         Updated slide_data with optimized title
     """
     try:
         current_title = slide_data.get("title", "")
         bullets = slide_data.get("bullets", [])
-        
+
         if not bullets:
             return slide_data
-        
+
         # Analyze bullet content themes
         llm = get_openai_llm()
         bullets_text = "\n".join([f"- {bullet}" for bullet in bullets])
-        
+
         optimization_prompt = f"""
         Create a specific, compelling slide title based on what the bullet points actually discuss.
         IGNORE the current title - focus only on the bullet content.
@@ -459,16 +542,18 @@ def optimize_slide_title(slide_data: Dict) -> Dict:
         Create a title that tells the story these bullets are telling.
         Return ONLY the optimized title text, no quotes or explanation.
         """
-        
+
         # Rate limiting for OpenAI API
         openai_limiter.wait_if_needed("openai")
         response = llm.invoke(optimization_prompt)
-        
+
         optimized_title = response.content.strip()
-        
+
         # Clean up quotation marks and formatting
-        optimized_title = optimized_title.strip('"\'""''')  # Remove various quote types
-        
+        optimized_title = optimized_title.strip(
+            '"\'""' ""
+        )  # Remove various quote types
+
         # Ensure title length is appropriate (max 8 words to prevent line wraps)
         words = optimized_title.split()
         if len(words) > 8:
@@ -480,24 +565,28 @@ def optimize_slide_title(slide_data: Dict) -> Dict:
             Keep the most important keywords and remove filler words.
             Return ONLY the condensed title, no quotes or explanation.
             """
-            
+
             # Rate limiting for OpenAI API
             openai_limiter.wait_if_needed("openai")
             condense_response = llm.invoke(condensed_prompt)
-            condensed_title = condense_response.content.strip().strip('"\'""''')
-            
+            condensed_title = condense_response.content.strip().strip('"\'""' "")
+
             if condensed_title and len(condensed_title.split()) <= 8:
                 optimized_title = condensed_title
-        
+
         # Always apply optimization if we got a reasonable result
-        if optimized_title and len(optimized_title.split()) <= 8 and len(optimized_title) > 2:
+        if (
+            optimized_title
+            and len(optimized_title.split()) <= 8
+            and len(optimized_title) > 2
+        ):
             # Only keep current title if optimization produced something clearly worse
-            if not (optimized_title.lower() in ["error", "none", "unknown", "untitled"]):
+            if optimized_title.lower() not in ["error", "none", "unknown", "untitled"]:
                 slide_data["title"] = optimized_title
                 slide_data["original_title"] = current_title  # Keep for debugging
-        
+
         return slide_data
-        
+
     except Exception as e:
         print(f"Error optimizing title for slide: {e}")
         return slide_data  # Return original if optimization fails
@@ -505,23 +594,30 @@ def optimize_slide_title(slide_data: Dict) -> Dict:
 
 def validate_slide_content(slide_data: Dict) -> bool:
     """Validate slide content quality.
-    
+
     Returns True if content meets quality standards, False otherwise.
     """
     # Check for generic filler phrases
     generic_phrases = [
-        "key aspect", "important consideration", "implications and next steps",
-        "key point", "main topic", "various factors", "different aspects",
-        "several elements", "multiple components", "diverse range"
+        "key aspect",
+        "important consideration",
+        "implications and next steps",
+        "key point",
+        "main topic",
+        "various factors",
+        "different aspects",
+        "several elements",
+        "multiple components",
+        "diverse range",
     ]
-    
+
     bullets = slide_data.get("bullets", [])
-    
+
     # Must have at least 2 bullets, max 4 for readability
     if len(bullets) < 2 or len(bullets) > 4:
         print(f"Invalid bullet count: {len(bullets)} (need 2-4)")
         return False
-    
+
     # Validate thought completeness and formatting
     is_complete, completeness_issues = validate_thought_completeness(bullets)
     if not is_complete:
@@ -529,43 +625,46 @@ def validate_slide_content(slide_data: Dict) -> bool:
         for issue in completeness_issues:
             print(f"  - {issue}")
         return False
-    
+
     # Check each bullet for quality
     for bullet in bullets:
         bullet_lower = bullet.lower()
-        
+
         # Reject generic phrases
         if any(phrase in bullet_lower for phrase in generic_phrases):
             print(f"Generic phrase detected in: '{bullet}'")
             return False
-        
+
         # Should contain at least one number, percentage, or specific term
         has_specifics = (
-            any(char.isdigit() for char in bullet) or
-            "%" in bullet or
-            "$" in bullet or
-            any(word in bullet_lower for word in ["million", "billion", "thousand", "by", "since", "ago"])
+            any(char.isdigit() for char in bullet)
+            or "%" in bullet
+            or "$" in bullet
+            or any(
+                word in bullet_lower
+                for word in ["million", "billion", "thousand", "by", "since", "ago"]
+            )
         )
-        
+
         if not has_specifics:
             print(f"Bullet lacks specific data: '{bullet}'")
             return False
-    
+
     return True
 
 
 def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
     """Create a unified content plan to eliminate repetition across slides.
-    
+
     This function implements a Content Distribution Matrix approach:
     1. Generate comprehensive research summary
     2. Create content allocation plan
     3. Distribute unique insights across slides
-    
+
     Args:
         outline: Presentation outline
         index_metadata: Vector index for RAG queries
-    
+
     Returns:
         Content allocation plan with unique insights per slide
     """
@@ -574,13 +673,13 @@ def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
         index_id = index_metadata.get("index_id")
         if not index_id:
             return {"error": "No index ID provided"}
-        
+
         index = _vector_index_store.get(index_id)
         if not index:
             return {"error": "Vector index not found in store"}
 
         query_engine = index.as_query_engine(similarity_top_k=settings.similarity_top_k)
-        
+
         # Phase 1: Generate comprehensive research summary
         topic = outline.get("topic", "")
         comprehensive_query = f"""
@@ -593,18 +692,21 @@ def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
         
         Include specific numbers, percentages, dates, company names.
         """
-        
+
         response = query_engine.query(comprehensive_query)
         research_summary = response.response
-        
+
         # Phase 2: Create content allocation plan
         llm = get_openai_llm()
         slide_titles = outline.get("slide_titles", [])
-        
+
         # Remove title, agenda, and references slides
-        content_slides = [title for title in slide_titles 
-                         if title.lower() not in ["title slide", "agenda", "references"]]
-        
+        content_slides = [
+            title
+            for title in slide_titles
+            if title.lower() not in ["title slide", "agenda", "references"]
+        ]
+
         allocation_prompt = f"""
         Based on this comprehensive research summary, create a Content Distribution Matrix 
         to allocate unique insights across {len(content_slides)} slides.
@@ -643,15 +745,17 @@ def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
         
         Ensure zero content repetition between slides. Each fact/statistic appears only once.
         """
-        
+
         # Rate limiting for OpenAI API
         openai_limiter.wait_if_needed("openai")
         allocation_response = llm.invoke(allocation_prompt)
-        
+
         # Debug: Check if response is empty
         if not allocation_response.content or not allocation_response.content.strip():
-            print(f"Empty response from allocation plan generation. Trying shorter prompt...")
-            
+            print(
+                "Empty response from allocation plan generation. Trying shorter prompt..."
+            )
+
             # Fallback with shorter prompt
             short_allocation_prompt = f"""
             Create a content allocation plan for these slides about {topic}:
@@ -663,14 +767,14 @@ def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
             
             Return JSON: {{"content_plan": {{"Slide Title": ["unique insight 1", "unique insight 2", "unique insight 3"]}}}}
             """
-            
+
             openai_limiter.wait_if_needed("openai")
             allocation_response = llm.invoke(short_allocation_prompt)
-        
+
         try:
             if not allocation_response.content:
                 raise json.JSONDecodeError("Empty response", "", 0)
-            
+
             # Clean JSON response (remove markdown formatting if present)
             content = allocation_response.content.strip()
             if content.startswith("```json"):
@@ -678,53 +782,67 @@ def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
             if content.endswith("```"):
                 content = content[:-3]  # Remove ```
             content = content.strip()
-                
+
             allocation_plan = json.loads(content)
             allocation_plan["research_summary"] = research_summary
             allocation_plan["source_references"] = []
-            
+
             # Extract references from the response
             for source_node in response.source_nodes:
-                if hasattr(source_node, "node") and hasattr(source_node.node, "metadata"):
+                if hasattr(source_node, "node") and hasattr(
+                    source_node.node, "metadata"
+                ):
                     url = source_node.node.metadata.get("url")
                     if url and url not in allocation_plan["source_references"]:
                         allocation_plan["source_references"].append(url)
-            
+
             return allocation_plan
-            
+
         except json.JSONDecodeError as e:
             print(f"Failed to parse content allocation plan: {e}")
             print(f"Response content: '{allocation_response.content[:200]}...'")
-            
+
             # Create fallback allocation plan using research summary
             fallback_plan = {"content_plan": {}, "source_references": []}
-            
+
             # Extract key insights from research summary for fallback
-            research_sentences = research_summary.split('. ')[:20]  # Take first 20 sentences
+            research_sentences = research_summary.split(". ")[
+                :20
+            ]  # Take first 20 sentences
             insights_per_slide = 3
-            
+
             for i, slide_title in enumerate(content_slides):
                 # Distribute different sentences to each slide
                 start_idx = i * insights_per_slide
                 end_idx = start_idx + insights_per_slide
-                slide_insights = research_sentences[start_idx:end_idx] if start_idx < len(research_sentences) else []
-                
+                slide_insights = (
+                    research_sentences[start_idx:end_idx]
+                    if start_idx < len(research_sentences)
+                    else []
+                )
+
                 # If we don't have enough research sentences, create basic insights
                 while len(slide_insights) < insights_per_slide:
-                    slide_insights.append(f"Key finding for {slide_title} from research data")
-                
-                fallback_plan["content_plan"][slide_title] = slide_insights[:insights_per_slide]
-            
+                    slide_insights.append(
+                        f"Key finding for {slide_title} from research data"
+                    )
+
+                fallback_plan["content_plan"][slide_title] = slide_insights[
+                    :insights_per_slide
+                ]
+
             # Extract references from the response
             for source_node in response.source_nodes:
-                if hasattr(source_node, "node") and hasattr(source_node.node, "metadata"):
+                if hasattr(source_node, "node") and hasattr(
+                    source_node.node, "metadata"
+                ):
                     url = source_node.node.metadata.get("url")
                     if url and url not in fallback_plan["source_references"]:
                         fallback_plan["source_references"].append(url)
-            
+
             print("Using fallback allocation plan...")
             return fallback_plan
-            
+
     except Exception as e:
         print(f"Error creating content allocation plan: {e}")
         return {"error": str(e)}
@@ -732,11 +850,11 @@ def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
 
 def generate_slides_individually(outline: Dict, index_metadata: Dict) -> List[Dict]:
     """Fallback function to generate slides individually with enhanced prompts.
-    
+
     Args:
         outline: Presentation outline
         index_metadata: Vector index for RAG queries
-        
+
     Returns:
         List of slide specifications
     """
@@ -745,18 +863,18 @@ def generate_slides_individually(outline: Dict, index_metadata: Dict) -> List[Di
         index_id = index_metadata.get("index_id")
         if not index_id:
             return [{"error": "No index ID provided"}]
-        
+
         index = _vector_index_store.get(index_id)
         if not index:
             return [{"error": "Vector index not found in store"}]
 
         query_engine = index.as_query_engine(similarity_top_k=settings.similarity_top_k)
-        
+
         slides = []
         slide_titles = outline.get("slide_titles", [])
         topic = outline.get("topic", "")
         llm = get_openai_llm()
-        
+
         # Track used content to minimize repetition
         used_content = set()
 
@@ -811,37 +929,47 @@ def generate_slides_individually(outline: Dict, index_metadata: Dict) -> List[Di
 
                 try:
                     slide_data = json.loads(conversion_response.content)
-                    
+
                     # Extract references
                     references = []
                     for source_node in response.source_nodes:
-                        if hasattr(source_node, "node") and hasattr(source_node.node, "metadata"):
+                        if hasattr(source_node, "node") and hasattr(
+                            source_node.node, "metadata"
+                        ):
                             url = source_node.node.metadata.get("url")
                             if url and url not in references:
                                 references.append(url)
-                    
+
                     slide_data["references"] = references
-                    
+
                     # Validate and check for repetition
                     if validate_slide_content(slide_data):
                         # Simple repetition check
                         bullets = slide_data.get("bullets", [])
-                        new_content = any(bullet.lower() not in used_content for bullet in bullets)
-                        
+                        new_content = any(
+                            bullet.lower() not in used_content for bullet in bullets
+                        )
+
                         if new_content or len(slides) < 3:  # Ensure minimum slides
                             # Optimize title based on actual bullet content
                             slide_data = optimize_slide_title(slide_data)
                             slides.append(slide_data)
-                            
+
                             # Add bullets to used content tracking
                             for bullet in bullets:
                                 used_content.add(bullet.lower())
-                            
+
                             # Show if title was optimized
-                            if slide_data.get("original_title") and slide_data.get("original_title") != slide_data.get("title"):
-                                print(f"✅ Generated individual slide: {title} → {slide_data['title']}")
+                            if slide_data.get("original_title") and slide_data.get(
+                                "original_title"
+                            ) != slide_data.get("title"):
+                                print(
+                                    f"✅ Generated individual slide: {title} → {slide_data['title']}"
+                                )
                             else:
-                                print(f"✅ Generated individual slide: {slide_data['title']}")
+                                print(
+                                    f"✅ Generated individual slide: {slide_data['title']}"
+                                )
                         else:
                             print(f"Skipping {title} due to content repetition")
                     else:
@@ -877,22 +1005,22 @@ def generate_slide_content(outline: Dict, index_metadata: Dict) -> List[Dict]:
         # Phase 1: Create content allocation plan to eliminate repetition
         print("Creating content allocation plan to eliminate repetition...")
         allocation_plan = create_content_allocation_plan(outline, index_metadata)
-        
+
         if "error" in allocation_plan:
             print(f"Failed to create allocation plan: {allocation_plan['error']}")
             print("Falling back to individual slide generation...")
-            
+
             # Fallback: Generate slides individually with enhanced prompts
             return generate_slides_individually(outline, index_metadata)
-        
+
         content_plan = allocation_plan.get("content_plan", {})
         source_references = allocation_plan.get("source_references", [])
-        
+
         # Phase 2: Generate slides based on the allocation plan
         slides = []
         slide_titles = outline.get("slide_titles", [])
         llm = get_openai_llm()
-        
+
         for i, title in enumerate(slide_titles):
             # Skip title and agenda slides - handle them separately
             if i == 0 or title.lower() in ["agenda", "references"]:
@@ -900,7 +1028,7 @@ def generate_slide_content(outline: Dict, index_metadata: Dict) -> List[Dict]:
 
             # Get allocated insights for this slide
             allocated_insights = content_plan.get(title, [])
-            
+
             if not allocated_insights:
                 print(f"No allocated insights found for slide '{title}', skipping...")
                 continue
@@ -949,40 +1077,48 @@ def generate_slide_content(outline: Dict, index_metadata: Dict) -> List[Dict]:
                 try:
                     slide_data = json.loads(conversion_response.content)
                     slide_data["references"] = source_references
-                    
+
                     # Validate content quality
                     if validate_slide_content(slide_data):
                         # Optimize title based on actual bullet content
                         slide_data = optimize_slide_title(slide_data)
                         slides.append(slide_data)
-                        
+
                         # Show if title was optimized
-                        if slide_data.get("original_title") and slide_data.get("original_title") != slide_data.get("title"):
-                            print(f"✅ Generated slide: {title} → {slide_data['title']}")
+                        if slide_data.get("original_title") and slide_data.get(
+                            "original_title"
+                        ) != slide_data.get("title"):
+                            print(
+                                f"✅ Generated slide: {title} → {slide_data['title']}"
+                            )
                         else:
                             print(f"✅ Generated slide: {slide_data['title']}")
                     else:
-                        print(f"Content quality check failed for {title}, regenerating...")
+                        print(
+                            f"Content quality check failed for {title}, regenerating..."
+                        )
                         raise json.JSONDecodeError("Quality check failed", "", 0)
 
                 except json.JSONDecodeError:
                     # Fallback: Create minimal slide with key insights
-                    print(f"JSON parsing failed for {title}, creating fallback slide...")
-                    
+                    print(
+                        f"JSON parsing failed for {title}, creating fallback slide..."
+                    )
+
                     fallback_bullets = []
                     for insight in allocated_insights[:3]:  # Max 3 bullets
                         # Simple conversion: take first 15 words for complete thoughts
                         words = insight.split()[:15]
                         if len(words) >= 4:  # Minimum 4 words
                             fallback_bullets.append(" ".join(words))
-                    
+
                     if fallback_bullets:
                         slide_data = {
                             "title": title,
                             "bullets": fallback_bullets,
                             "speaker_notes": f"Key insights: {'. '.join(allocated_insights)}",
                             "slide_type": "content",
-                            "references": source_references
+                            "references": source_references,
                         }
                         slides.append(slide_data)
                         print(f"✅ Generated fallback slide: {title}")
@@ -991,7 +1127,9 @@ def generate_slide_content(outline: Dict, index_metadata: Dict) -> List[Dict]:
                 print(f"Error generating content for slide '{title}': {e}")
                 continue
 
-        print(f"Successfully generated {len(slides)} unique slides with no content repetition")
+        print(
+            f"Successfully generated {len(slides)} unique slides with no content repetition"
+        )
         return slides
 
     except Exception as e:
@@ -1001,53 +1139,53 @@ def generate_slide_content(outline: Dict, index_metadata: Dict) -> List[Dict]:
 
 def validate_presentation_structure(slide_specs: List[Dict]) -> Tuple[bool, List[str]]:
     """Validate overall presentation structure and content quality.
-    
+
     Args:
         slide_specs: List of slide specifications
-        
+
     Returns:
         Tuple of (is_valid, list_of_issues)
     """
     issues = []
-    
+
     # Check minimum number of content slides
     if len(slide_specs) < 3:
         issues.append(f"Too few slides: {len(slide_specs)} (minimum 3 required)")
-    
+
     # Check for unique slide titles
     titles = [spec.get("title", "") for spec in slide_specs]
     if len(titles) != len(set(titles)):
         duplicate_titles = [title for title in set(titles) if titles.count(title) > 1]
         issues.append(f"Duplicate slide titles found: {duplicate_titles}")
-    
+
     # Check each slide individually
     for i, spec in enumerate(slide_specs):
         slide_title = spec.get("title", f"Slide {i+1}")
-        
+
         # Validate individual slide content
         if not validate_slide_content(spec):
             issues.append(f"Content validation failed for slide: '{slide_title}'")
-        
+
         # Check for references
         references = spec.get("references", [])
         if not references:
             issues.append(f"No references found for slide: '{slide_title}'")
-    
+
     # Check for content repetition across slides
     all_bullets = []
     for spec in slide_specs:
         bullets = spec.get("bullets", [])
         all_bullets.extend(bullets)
-    
+
     # Look for similar bullets (basic similarity check)
     for i, bullet1 in enumerate(all_bullets):
-        for j, bullet2 in enumerate(all_bullets[i+1:], i+1):
+        for j, bullet2 in enumerate(all_bullets[i + 1 :], i + 1):
             # Check if bullets share more than 50% of their words
             words1 = set(bullet1.lower().split())
             words2 = set(bullet2.lower().split())
             if len(words1 & words2) / max(len(words1), len(words2)) > 0.5:
                 issues.append(f"Similar content detected: '{bullet1}' and '{bullet2}'")
-    
+
     return len(issues) == 0, issues
 
 
@@ -1055,10 +1193,10 @@ def format_slide_text(text_frame, content: str, bullet_count: int):
     """Apply proper formatting to slide text with dynamic sizing."""
     from pptx.util import Pt
     from pptx.enum.text import PP_ALIGN
-    
+
     # Clear existing content
     text_frame.clear()
-    
+
     # Calculate optimal font size based on content
     if bullet_count <= 3:
         font_size = Pt(28)  # Larger for fewer bullets
@@ -1066,28 +1204,28 @@ def format_slide_text(text_frame, content: str, bullet_count: int):
         font_size = Pt(24)  # Medium for 4 bullets
     else:
         font_size = Pt(20)  # Smaller for 5+ bullets
-    
+
     # Add content with formatting
-    lines = content.split('\n')
+    lines = content.split("\n")
     for i, line in enumerate(lines):
         if not line.strip():
             continue
-            
+
         if i > 0:
             # Add new paragraph for each bullet
             p = text_frame.add_paragraph()
         else:
             # Use first paragraph
             p = text_frame.paragraphs[0]
-        
+
         p.text = line.strip()
         p.level = 0
         p.alignment = PP_ALIGN.LEFT
-        
+
         # Apply font formatting
         for run in p.runs:
             run.font.size = font_size
-            run.font.name = 'Calibri'
+            run.font.name = "Calibri"
 
 
 @tool
@@ -1107,12 +1245,14 @@ def create_presentation(
         # Final comprehensive validation before presentation creation
         print("Running final presentation validation...")
         is_valid, validation_issues = validate_presentation_structure(slide_specs)
-        
+
         if not is_valid:
             print("❌ Presentation validation failed:")
             for issue in validation_issues:
                 print(f"  - {issue}")
-            print("Proceeding with presentation creation despite validation warnings...")
+            print(
+                "Proceeding with presentation creation despite validation warnings..."
+            )
         else:
             print("✅ Presentation validation passed successfully")
         # Create presentation from template or blank
@@ -1154,7 +1294,9 @@ def create_presentation(
             if bullets:
                 content_placeholder = slide.placeholders[1]
                 bullet_text = "\n".join([bullet for bullet in bullets])
-                format_slide_text(content_placeholder.text_frame, bullet_text, len(bullets))
+                format_slide_text(
+                    content_placeholder.text_frame, bullet_text, len(bullets)
+                )
 
             # Add speaker notes
             notes = spec.get("speaker_notes", "")

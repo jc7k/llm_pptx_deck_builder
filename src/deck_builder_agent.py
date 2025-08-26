@@ -1,6 +1,5 @@
 """Main LangGraph workflow for the LLM PPTX Deck Builder."""
 
-import sys
 import time
 from typing import Dict, Any, Optional, Callable
 from langchain_core.messages import HumanMessage
@@ -22,10 +21,12 @@ from .tools import (
 # Global progress callback for verbose mode
 _progress_callback: Optional[Callable[[str, str], None]] = None
 
+
 def set_progress_callback(callback: Optional[Callable[[str, str], None]]):
     """Set global progress callback for verbose mode."""
     global _progress_callback
     _progress_callback = callback
+
 
 def _log_progress(step: str, message: str):
     """Log progress to callback if available."""
@@ -40,7 +41,7 @@ def research_node(state: DeckBuilderState) -> Dict[str, Any]:
     """Research node: Search web using Brave Search API."""
     try:
         user_request = state["user_request"]
-        
+
         _log_progress("🔍 RESEARCH", f"Starting web search for: {user_request}")
         _log_progress("🔍 RESEARCH", "Applying rate limiting for Brave Search API...")
 
@@ -49,18 +50,20 @@ def research_node(state: DeckBuilderState) -> Dict[str, Any]:
 
         # Create enhanced search query for better results
         enhanced_query = f"{user_request} statistics data trends 2025 report analysis"
-        
+
         # Search for relevant information
-        _log_progress("🔍 RESEARCH", f"Enhanced search query: {enhanced_query[:100]}...")
+        _log_progress(
+            "🔍 RESEARCH", f"Enhanced search query: {enhanced_query[:100]}..."
+        )
         _log_progress("🔍 RESEARCH", "Querying Brave Search API...")
         search_results = search_web.invoke({"query": enhanced_query, "count": 15})
-        
+
         _log_progress("🔍 RESEARCH", f"✅ Found {len(search_results)} search results")
-        
+
         if search_results:
-            urls = [result.get('url', '') for result in search_results[:5]]
+            urls = [result.get("url", "") for result in search_results[:5]]
             _log_progress("🔍 RESEARCH", f"Top sources: {', '.join(urls)}")
-        
+
         # Add a human message about the research
         research_message = HumanMessage(
             content=f"Found {len(search_results)} search results for: {user_request}"
@@ -86,8 +89,10 @@ def document_loading_node(state: DeckBuilderState) -> Dict[str, Any]:
     """Document loading node: Load web pages using LangChain WebBaseLoader."""
     try:
         search_results = state["search_results"]
-        
-        _log_progress("📄 DOCUMENTS", f"Processing {len(search_results)} search results...")
+
+        _log_progress(
+            "📄 DOCUMENTS", f"Processing {len(search_results)} search results..."
+        )
 
         # Update status
         state["status"] = "Loading documents..."
@@ -97,18 +102,20 @@ def document_loading_node(state: DeckBuilderState) -> Dict[str, Any]:
         urls = extract_urls_from_search_results.invoke(
             {"search_results": search_results}
         )
-        
+
         _log_progress("📄 DOCUMENTS", f"Found {len(urls)} URLs to process")
         _log_progress("📄 DOCUMENTS", "Starting document loading with rate limiting...")
 
         # Load documents
         documents = load_web_documents.invoke({"urls": urls})
-        
-        _log_progress("📄 DOCUMENTS", f"✅ Successfully loaded {len(documents)} documents")
-        
+
+        _log_progress(
+            "📄 DOCUMENTS", f"✅ Successfully loaded {len(documents)} documents"
+        )
+
         # Log document details
         if documents:
-            total_chars = sum(len(doc.get('content', '')) for doc in documents)
+            total_chars = sum(len(doc.get("content", "")) for doc in documents)
             _log_progress("📄 DOCUMENTS", f"Total content: {total_chars:,} characters")
 
         loading_message = HumanMessage(
@@ -135,8 +142,10 @@ def indexing_node(state: DeckBuilderState) -> Dict[str, Any]:
     """Indexing node: Create LlamaIndex vector store."""
     try:
         documents = state["documents"]
-        
-        _log_progress("🧠 INDEXING", f"Creating vector index from {len(documents)} documents...")
+
+        _log_progress(
+            "🧠 INDEXING", f"Creating vector index from {len(documents)} documents..."
+        )
         _log_progress("🧠 INDEXING", "Converting documents to LlamaIndex format...")
 
         # Update status
@@ -148,11 +157,16 @@ def indexing_node(state: DeckBuilderState) -> Dict[str, Any]:
 
         if "error" in vector_index:
             raise Exception(vector_index["error"])
-        
-        doc_count = vector_index.get('document_count', 0)
-        chunk_count = vector_index.get('chunk_count', 0)
-        _log_progress("🧠 INDEXING", f"✅ Vector index created: {doc_count} docs, {chunk_count} chunks")
-        _log_progress("🧠 INDEXING", f"Index ID: {vector_index.get('index_id', 'unknown')}")
+
+        doc_count = vector_index.get("document_count", 0)
+        chunk_count = vector_index.get("chunk_count", 0)
+        _log_progress(
+            "🧠 INDEXING",
+            f"✅ Vector index created: {doc_count} docs, {chunk_count} chunks",
+        )
+        _log_progress(
+            "🧠 INDEXING", f"Index ID: {vector_index.get('index_id', 'unknown')}"
+        )
 
         indexing_message = HumanMessage(
             content=f"Created vector index with {doc_count} documents"
@@ -179,8 +193,10 @@ def outline_generation_node(state: DeckBuilderState) -> Dict[str, Any]:
     try:
         user_request = state["user_request"]
         vector_index = state["vector_index"]
-        
-        _log_progress("📋 OUTLINE", f"Generating presentation outline for: {user_request}")
+
+        _log_progress(
+            "📋 OUTLINE", f"Generating presentation outline for: {user_request}"
+        )
         _log_progress("📋 OUTLINE", "Querying vector index for relevant content...")
 
         # Update status
@@ -197,15 +213,18 @@ def outline_generation_node(state: DeckBuilderState) -> Dict[str, Any]:
 
         slide_count = len(outline.get("slide_titles", []))
         _log_progress("📋 OUTLINE", f"✅ Generated outline with {slide_count} slides")
-        
+
         # Log slide titles
         if outline.get("slide_titles"):
             titles = outline["slide_titles"][:5]  # Show first 5
-            _log_progress("📋 OUTLINE", f"Slides: {', '.join(titles)}{'...' if len(outline['slide_titles']) > 5 else ''}")
-        
+            _log_progress(
+                "📋 OUTLINE",
+                f"Slides: {', '.join(titles)}{'...' if len(outline['slide_titles']) > 5 else ''}",
+            )
+
         duration = outline.get("duration_minutes", "Unknown")
         _log_progress("📋 OUTLINE", f"Estimated duration: {duration} minutes")
-        
+
         outline_message = HumanMessage(
             content=f"Generated outline with {slide_count} slides for: {outline.get('topic', user_request)}"
         )
@@ -230,18 +249,24 @@ def content_generation_node(state: DeckBuilderState) -> Dict[str, Any]:
     try:
         outline = state["outline"]
         vector_index = state["vector_index"]
-        
+
         slide_count = len(outline.get("slide_titles", []))
-        _log_progress("📝 CONTENT", f"Generating detailed content for {slide_count} slides...")
-        _log_progress("📝 CONTENT", "Querying vector index for slide-specific content...")
+        _log_progress(
+            "📝 CONTENT", f"Generating detailed content for {slide_count} slides..."
+        )
+        _log_progress(
+            "📝 CONTENT", "Querying vector index for slide-specific content..."
+        )
 
         # Update status
         state["status"] = "Generating slide content..."
 
         # Generate slide content
         _log_progress("📝 CONTENT", "Applying rate limiting for OpenAI API...")
-        _log_progress("📝 CONTENT", "Processing slides with RAG-based content generation...")
-        
+        _log_progress(
+            "📝 CONTENT", "Processing slides with RAG-based content generation..."
+        )
+
         slide_specs = generate_slide_content.invoke(
             {"outline": outline, "index_metadata": vector_index}
         )
@@ -249,7 +274,9 @@ def content_generation_node(state: DeckBuilderState) -> Dict[str, Any]:
         if not slide_specs or any("error" in spec for spec in slide_specs):
             raise Exception("Failed to generate slide content")
 
-        _log_progress("📝 CONTENT", f"✅ Generated content for {len(slide_specs)} slides")
+        _log_progress(
+            "📝 CONTENT", f"✅ Generated content for {len(slide_specs)} slides"
+        )
 
         # Collect all references
         _log_progress("📝 CONTENT", "Collecting and processing citations...")
@@ -260,7 +287,9 @@ def content_generation_node(state: DeckBuilderState) -> Dict[str, Any]:
             if refs:
                 _log_progress("📝 CONTENT", f"Slide {i}: {len(refs)} citations")
 
-        _log_progress("📝 CONTENT", f"Total citations before deduplication: {len(all_references)}")
+        _log_progress(
+            "📝 CONTENT", f"Total citations before deduplication: {len(all_references)}"
+        )
 
         # Deduplicate references
         _log_progress("📝 CONTENT", "Deduplicating citations...")
@@ -268,11 +297,16 @@ def content_generation_node(state: DeckBuilderState) -> Dict[str, Any]:
             {"references": all_references}
         )
 
-        _log_progress("📝 CONTENT", f"✅ Final unique citations: {len(unique_references)}")
-        
+        _log_progress(
+            "📝 CONTENT", f"✅ Final unique citations: {len(unique_references)}"
+        )
+
         # Log content summary
         total_bullets = sum(len(spec.get("bullets", [])) for spec in slide_specs)
-        _log_progress("📝 CONTENT", f"Generated {total_bullets} total bullet points across all slides")
+        _log_progress(
+            "📝 CONTENT",
+            f"Generated {total_bullets} total bullet points across all slides",
+        )
 
         content_message = HumanMessage(
             content=f"Generated content for {len(slide_specs)} slides with {len(unique_references)} unique references"
@@ -302,15 +336,17 @@ def presentation_creation_node(state: DeckBuilderState) -> Dict[str, Any]:
         slide_specs = state["slide_specs"]
         template_path = state.get("template_path")
         references = state.get("references", [])
-        
+
         slide_count = len(slide_specs)
-        _log_progress("🎨 PRESENTATION", f"Creating PowerPoint file with {slide_count} slides...")
-        
+        _log_progress(
+            "🎨 PRESENTATION", f"Creating PowerPoint file with {slide_count} slides..."
+        )
+
         if template_path:
             _log_progress("🎨 PRESENTATION", f"Using template: {template_path}")
         else:
             _log_progress("🎨 PRESENTATION", "Using default PowerPoint template")
-        
+
         _log_progress("🎨 PRESENTATION", f"Including {len(references)} references")
 
         # Update status
@@ -320,7 +356,7 @@ def presentation_creation_node(state: DeckBuilderState) -> Dict[str, Any]:
         _log_progress("🎨 PRESENTATION", "Initializing python-pptx presentation...")
         _log_progress("🎨 PRESENTATION", "Rendering title slide...")
         _log_progress("🎨 PRESENTATION", "Processing content slides...")
-        
+
         output_path = create_presentation.invoke(
             {"slide_specs": slide_specs, "template_path": template_path}
         )
@@ -329,17 +365,18 @@ def presentation_creation_node(state: DeckBuilderState) -> Dict[str, Any]:
             raise Exception(output_path)
 
         _log_progress("🎨 PRESENTATION", f"✅ Presentation saved to: {output_path}")
-        
+
         # Calculate file size if possible
         try:
             import os
+
             if os.path.exists(output_path):
                 file_size = os.path.getsize(output_path)
                 file_size_mb = file_size / (1024 * 1024)
                 _log_progress("🎨 PRESENTATION", f"File size: {file_size_mb:.1f} MB")
         except Exception:
             pass  # File size calculation is optional
-        
+
         _log_progress("🎨 PRESENTATION", "🎉 Presentation generation complete!")
 
         presentation_message = HumanMessage(
