@@ -381,19 +381,18 @@ python deck_builder_cli.py \
 The system can be integrated into other applications:
 
 ```python
-from src.deck_builder_agent import DeckBuilderAgent
-from src.dependencies import get_dependencies
+from src.deck_builder_agent import build_deck_sync
 
-# Initialize agent
-deps = get_dependencies()
-agent = DeckBuilderAgent(deps)
+# Generate presentation synchronously
+result = build_deck_sync(
+    user_request="Market Analysis 2025",
+    template_path="corporate_template.pptx"  # Optional
+)
 
-# Generate presentation
-result = agent.generate_deck("Market Analysis 2025")
 if result["success"]:
     print(f"Generated: {result['output_path']}")
-    print(f"Slides: {result['slide_count']}")
-    print(f"References: {result['references_count']}")
+    print(f"Total slides: {len(result['slide_specs'])}")
+    print(f"References: {len(result['references'])}")
 ```
 
 ### Advanced CLI Usage
