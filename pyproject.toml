@@ -1,0 +1,40 @@
+[project]
+name = "llm-pptx-deck-builder"
+version = "0.1.0"
+description = "LangChain-powered PowerPoint deck builder with Brave Search and LlamaIndex RAG"
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    "langchain>=0.2.16",
+    "langchain-community>=0.2.16", 
+    "langchain-openai>=0.2.1",
+    "langgraph>=0.2.28",
+    "llama-index>=0.11.16",
+    "llama-index-llms-openai>=0.2.5",
+    "llama-index-embeddings-openai>=0.2.3",
+    "python-pptx>=0.6.23",
+    "requests>=2.32.3",
+    "beautifulsoup4>=4.12.3",
+    "html2text>=2024.2.26",
+    "tiktoken>=0.7.0",
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3.2",
+    "ruff>=0.6.9", 
+    "black>=24.8.0",
+    "mypy>=1.11.0",
+    "langsmith>=0.1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
