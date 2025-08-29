@@ -1,0 +1,2 @@
+"""Namespace for model stubs."""
+

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  tests-offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install uv
+        run: pip install uv
+      - name: Install project
+        run: |
+          uv venv
+          uv sync
+      - name: Run tests (offline)
+        run: |
+          uv run pytest -v
+
+  tests-full:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install uv
+        run: pip install uv
+      - name: Install with extras
+        run: |
+          uv venv
+          uv pip install -e .[full]
+          uv sync
+      - name: Lint and type-check
+        run: |
+          uv run ruff check src tests || true
+          uv run mypy src || true
+      - name: Run tests
+        env:
+          BRAVE_API_KEY: test
+          OPENAI_API_KEY: test
+        run: |
+          uv run pytest -v
+

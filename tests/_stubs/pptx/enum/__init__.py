@@ -1,0 +1,2 @@
+"""Namespace for enum stubs."""
+

@@ -81,11 +81,12 @@ def validate_api_keys():
         raise ValueError(f"Missing required API keys: {', '.join(errors)}")
 
 
-# Initialize configurations on module import
-try:
-    validate_api_keys()
-    configure_llamaindex_settings()
-    configure_langsmith()
-except Exception as e:
-    print(f"Warning: Failed to initialize dependencies: {e}")
-    print("Please check your environment configuration.")
+# Initialize configurations on module import (can be disabled via env)
+if os.environ.get("DECK_BUILDER_AUTOINIT", "1") == "1":
+    try:
+        validate_api_keys()
+        configure_llamaindex_settings()
+        configure_langsmith()
+    except Exception as e:
+        print(f"Warning: Failed to initialize dependencies: {e}")
+        print("Please check your environment configuration.")

@@ -1,5 +1,12 @@
 """Pytest configuration and fixtures for testing."""
 
+# Ensure test-only stubs are available on import path before other imports
+import sys
+from pathlib import Path
+_STUBS_DIR = Path(__file__).resolve().parent / "_stubs"
+if _STUBS_DIR.exists():
+    sys.path.insert(0, str(_STUBS_DIR))
+
 import pytest
 import os
 import tempfile

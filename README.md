@@ -38,6 +38,14 @@ uv run python deck_builder_cli.py --topic "AI impact on job market trends 2025"
 
 # Use a custom template
 uv run python deck_builder_cli.py --topic "Market Analysis" --template corporate_template.pptx
+
+# Toggle validation mode
+# Strict (default): enforces complete thoughts and specificity
+uv run python deck_builder_cli.py --topic "AI in Education" --strict-validation
+# Lenient: faster, suitable for drafts/testing
+uv run python deck_builder_cli.py --topic "AI in Education" --lenient-validation
+# Or via env var
+DECK_STRICT=0 uv run python deck_builder_cli.py --topic "AI in Education"
 ```
 
 ## Example Output
@@ -230,6 +238,10 @@ LANGCHAIN_API_KEY=ls__************************
 
 # Model Configuration
 EMBEDDING_MODEL=text-embedding-3-small
+
+# Validation Mode (optional)
+# Set to 1/true to enforce strict validation globally; 0/false for lenient
+DECK_STRICT=1
 ```
 
 ### Advanced Configuration
@@ -242,7 +254,19 @@ chunk_size: int = 1000              # Text chunk size for indexing
 chunk_overlap: int = 200            # Text chunk overlap
 similarity_top_k: int = 10          # Top K results for similarity search
 default_output_dir: str = "output"  # Default output directory
+strict_validation: bool = False      # Default CLI sets this to True unless DECK_STRICT=0
 ```
+
+## Offline Tests vs Full Dependencies
+
+- The test suite uses lightweight stubs under `tests/_stubs` so it runs without network or heavy installs.
+- For running with full features locally, install extras:
+
+```bash
+uv pip install -e .[full]
+```
+
+This pulls in `langgraph`, `langchain-community`, `langchain-openai`, `llama-index`, `python-pptx`, and `pydantic-ai`.
 
 ### Rate Limiting
 

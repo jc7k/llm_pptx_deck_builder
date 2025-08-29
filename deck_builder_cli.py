@@ -75,6 +75,16 @@ Examples:
         action="store_true",
         help="Only validate configuration and API keys"
     )
+    parser.add_argument(
+        "--strict-validation",
+        action="store_true",
+        help="Enforce strict content validation (default if not specified)"
+    )
+    parser.add_argument(
+        "--lenient-validation",
+        action="store_true",
+        help="Relax validation for quick drafts/testing"
+    )
     
     parser.add_argument(
         "--verbose",
@@ -129,6 +139,23 @@ Examples:
         if args.verbose:
             print(f"✓ Template file found: {args.template}")
     
+    # Determine validation mode (flags > env > default strict)
+    strict_env = os.environ.get("DECK_STRICT")
+    if args.lenient_validation:
+        strict = False
+    elif args.strict_validation:
+        strict = True
+    elif strict_env is not None:
+        strict = strict_env.strip().lower() in ("1", "true", "yes", "on")
+    else:
+        strict = True
+
+    # Apply validation mode to settings
+    try:
+        settings.strict_validation = strict
+    except Exception:
+        pass
+
     # Build the presentation
     print(f"🚀 Starting presentation generation for: {args.topic}")
     print("This may take several minutes...")
@@ -138,6 +165,9 @@ Examples:
         print(f"  - Topic: {args.topic}")
         print(f"  - Template: {args.template or 'Default'}")
         print(f"  - Output: {args.output or 'Auto-generated'}")
+        print(f"  - Validation: {'Strict' if strict else 'Lenient'}")
+        # Note: --max-slides, --audience, and --duration are not yet wired into
+        # the prompts/pipeline and are informational for now.
         print(f"  - Max search results: {settings.max_search_results}")
         print(f"  - Max documents: {settings.max_documents}")
     

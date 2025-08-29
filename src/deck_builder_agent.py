@@ -342,6 +342,14 @@ def presentation_creation_node(state: DeckBuilderState) -> Dict[str, Any]:
             "🎨 PRESENTATION", f"Creating PowerPoint file with {slide_count} slides..."
         )
 
+        if slide_count == 0:
+            error_message = HumanMessage(content="No slides to render")
+            return {
+                "output_path": "",
+                "messages": state["messages"] + [error_message],
+                "status": "Presentation creation failed: No slides to render",
+            }
+
         if template_path:
             _log_progress("🎨 PRESENTATION", f"Using template: {template_path}")
         else:
@@ -526,10 +534,15 @@ def build_deck_sync(
     try:
         final_state = deck_builder_graph.invoke(initial_state, config)
 
+        output_path = final_state.get("output_path", "")
+        slide_count = len(final_state.get("slide_specs", []))
+        status_text = final_state.get("status", "")
+        success = (not str(status_text).lower().startswith("failed")) and bool(output_path) and output_path.endswith(".pptx")
+
         return {
-            "success": True,
-            "output_path": final_state.get("output_path", ""),
-            "slide_count": len(final_state.get("slide_specs", [])),
+            "success": success,
+            "output_path": output_path,
+            "slide_count": slide_count,
             "references_count": len(final_state.get("references", [])),
             "status": final_state.get("status", "Unknown"),
             "messages": [msg.content for msg in final_state.get("messages", [])],

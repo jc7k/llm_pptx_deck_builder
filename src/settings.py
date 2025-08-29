@@ -47,6 +47,12 @@ class Settings(BaseSettings):
         default="output", description="Default output directory"
     )
 
+    # Validation/quality configuration
+    strict_validation: bool = Field(
+        default=False,
+        description="Use strict content validation rules (set True for prod)",
+    )
+
     # HTTP Configuration
     user_agent: Optional[str] = Field(
         default=None, description="User agent string for HTTP requests"
@@ -81,6 +87,16 @@ class SettingsProxy:
 
     def __setattr__(self, name, value):
         setattr(get_settings(), name, value)
+
+    def __delattr__(self, name):  # Support mocking frameworks cleaning up
+        try:
+            # Attempt to delete attribute on the underlying settings if it exists
+            if hasattr(get_settings(), name):
+                # Reset to default by setting to current value (no-op)
+                # Deletion isn't meaningful for BaseSettings; ignore safely.
+                return
+        except Exception:
+            pass
 
 
 settings = SettingsProxy()
