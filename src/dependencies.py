@@ -105,7 +105,7 @@ def configure_phoenix():
 
         # Configure OpenTelemetry tracing
         resource = Resource.create({
-            "service.name": settings.phoenix_project_name,
+            "service.name": "llm-pptx-deck-builder",  # Fixed: use literal string instead of missing setting
             "service.version": "1.0.0",
         })
 
@@ -143,7 +143,7 @@ def configure_phoenix():
         print("✓ LlamaIndex instrumentation enabled")
         
         print(f"✓ Phoenix observability initialized successfully!")
-        return session
+        return True  # Fixed: return boolean instead of undefined session
         
     except Exception as e:
         print(f"Warning: Failed to initialize Phoenix: {e}")
