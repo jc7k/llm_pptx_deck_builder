@@ -871,7 +871,7 @@ def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
 
 
 def generate_slides_individually(outline: Dict, index_metadata: Dict) -> List[Dict]:
-    """Fallback function to generate slides individually with enhanced prompts.
+    """Fallback function to generate slides individually with enhanced prompts and error recovery.
 
     Args:
         outline: Presentation outline
@@ -885,7 +885,8 @@ def generate_slides_individually(outline: Dict, index_metadata: Dict) -> List[Di
         index_id = index_metadata.get("index_id")
         index = _vector_index_store.get(index_id) if index_id else None
         if index is None:
-            return [{"error": "Vector index not available"}]
+            print("❌ Vector index not available for individual slide generation")
+            return []
 
         query_engine = index.as_query_engine(similarity_top_k=settings.similarity_top_k)
 
@@ -896,78 +897,117 @@ def generate_slides_individually(outline: Dict, index_metadata: Dict) -> List[Di
 
         # Track used content to minimize repetition
         used_content = set()
+        failed_slides = []
+
+        print(f"🔄 Generating {len(slide_titles)} slides individually with error recovery...")
 
         for i, title in enumerate(slide_titles):
             # Skip title and agenda slides
             if i == 0 or title.lower() in ["agenda", "references"]:
                 continue
 
-            try:
-                # Generate specific query for this slide
-                content_query = f"""
-                For slide "{title}" about {topic}, provide specific data and insights.
-                Focus on unique content not covered in previous slides.
-                Include statistics, percentages, company names, dates, and metrics.
-                Avoid generic statements - only factual, specific information.
-                """
-
-                response = query_engine.query(content_query)
-
-                # Generate slide content with strict formatting
-                bullet_prompt = f"""
-                Create content for slide "{title}" based on this research:
-                
-                {response.response[:1500]}
-                
-                CRITICAL REQUIREMENTS:
-                - Focus on complete THOUGHTS, not complete sentences
-                - Maximum 15 words per bullet for complete ideas
-                - Use bullet-style phrasing with specific data
-                - NO markdown formatting (**, __, etc.)
-                - NO generic phrases like "key aspects" or "important considerations"
-                - Include company names, statistics, and concrete facts
-                
-                Return ONLY JSON:
-                {{
-                    "title": "{title}",
-                    "bullets": [
-                        "Complete thought with specific data (max 15 words)",
-                        "Another key insight with metrics and context",  
-                        "Clear actionable concept with concrete facts"
-                    ],
-                    "speaker_notes": "Detailed explanation with context. NO markdown formatting.",
-                    "slide_type": "content"
-                }}
-                
-                Generate 3-4 complete thoughts as bullets, max 15 words each.
-                """
-
-                # Rate limiting for OpenAI API
-                openai_limiter.wait_if_needed("openai")
-                conversion_response = llm.invoke(bullet_prompt)
-
+            slide_generated = False
+            
+            # Try to generate the slide with multiple strategies
+            for strategy in ["detailed", "simple", "emergency"]:
                 try:
-                    slide_data = json.loads(conversion_response.content)
+                    if strategy == "detailed":
+                        # Generate specific query for this slide
+                        content_query = f"""
+                        For slide "{title}" about {topic}, provide specific data and insights.
+                        Focus on unique content not covered in previous slides.
+                        Include statistics, percentages, company names, dates, and metrics.
+                        Avoid generic statements - only factual, specific information.
+                        """
+                        
+                        bullet_prompt = f"""
+                        Create content for slide "{title}" based on this research:
+                        
+                        {query_engine.query(content_query).response[:1500]}
+                        
+                        CRITICAL REQUIREMENTS:
+                        - Focus on complete THOUGHTS, not complete sentences
+                        - Maximum 15 words per bullet for complete ideas
+                        - Use bullet-style phrasing with specific data
+                        - NO markdown formatting (**, __, etc.)
+                        - NO generic phrases like "key aspects" or "important considerations"
+                        - Include company names, statistics, and concrete facts
+                        
+                        Return ONLY JSON:
+                        {{
+                            "title": "{title}",
+                            "bullets": [
+                                "Complete thought with specific data (max 15 words)",
+                                "Another key insight with metrics and context",  
+                                "Clear actionable concept with concrete facts"
+                            ],
+                            "speaker_notes": "Detailed explanation with context. NO markdown formatting.",
+                            "slide_type": "content"
+                        }}
+                        
+                        Generate 3-4 complete thoughts as bullets, max 15 words each.
+                        """
+                    
+                    elif strategy == "simple":
+                        # Simplified approach
+                        bullet_prompt = f"""
+                        Create simple bullets for slide "{title}" about {topic}:
+                        
+                        JSON format:
+                        {{
+                            "title": "{title}",
+                            "bullets": ["Point 1", "Point 2", "Point 3"],
+                            "speaker_notes": "Brief explanation.",
+                            "slide_type": "content"
+                        }}
+                        """
+                    
+                    else:  # emergency
+                        # Emergency fallback
+                        slide_data = _create_emergency_fallback_slide(title, topic)
+                        slides.append(slide_data)
+                        print(f"🚨 Emergency slide created: {title}")
+                        slide_generated = True
+                        break
 
-                    # Extract references
-                    references = []
-                    for source_node in response.source_nodes:
-                        if hasattr(source_node, "node") and hasattr(
-                            source_node.node, "metadata"
-                        ):
-                            url = source_node.node.metadata.get("url")
-                            if url and url not in references:
-                                references.append(url)
+                    # Rate limiting for OpenAI API
+                    openai_limiter.wait_if_needed("openai")
+                    conversion_response = llm.invoke(bullet_prompt)
 
-                    slide_data["references"] = references
+                    # Parse JSON safely
+                    slide_data = _parse_slide_json_safely(conversion_response.content, title)
+                    
+                    if not slide_data:
+                        print(f"⚠️  JSON parsing failed for {title} using {strategy} strategy, trying next...")
+                        continue
+
+                    # Extract references if available
+                    if strategy == "detailed":
+                        try:
+                            response = query_engine.query(content_query)
+                            references = []
+                            for source_node in response.source_nodes:
+                                if hasattr(source_node, "node") and hasattr(source_node.node, "metadata"):
+                                    url = source_node.node.metadata.get("url")
+                                    if url and url not in references:
+                                        references.append(url)
+                            slide_data["references"] = references
+                        except Exception:
+                            slide_data["references"] = []
+                    else:
+                        slide_data["references"] = []
 
                     # Validate and check for repetition
-                    if validate_slide_content(slide_data):
+                    validation_passed = True
+                    if strategy == "detailed" and not validate_slide_content(slide_data):
+                        print(f"⚠️  Content validation failed for {title} using {strategy} strategy, trying simpler approach...")
+                        validation_passed = False
+                        continue
+
+                    if validation_passed:
                         # Simple repetition check
                         bullets = slide_data.get("bullets", [])
-                        new_content = any(
-                            bullet.lower() not in used_content for bullet in bullets
-                        )
+                        new_content = any(bullet.lower() not in used_content for bullet in bullets)
 
                         if new_content or len(slides) < 3:  # Ensure minimum slides
                             # Optimize title based on actual bullet content
@@ -979,33 +1019,38 @@ def generate_slides_individually(outline: Dict, index_metadata: Dict) -> List[Di
                                 used_content.add(bullet.lower())
 
                             # Show if title was optimized
-                            if slide_data.get("original_title") and slide_data.get(
-                                "original_title"
-                            ) != slide_data.get("title"):
-                                print(
-                                    f"✅ Generated individual slide: {title} → {slide_data['title']}"
-                                )
+                            if slide_data.get("original_title") and slide_data.get("original_title") != slide_data.get("title"):
+                                strategy_note = f" ({strategy})" if strategy != "detailed" else ""
+                                print(f"✅ Generated individual slide: {title} → {slide_data['title']}{strategy_note}")
                             else:
-                                print(
-                                    f"✅ Generated individual slide: {slide_data['title']}"
-                                )
+                                strategy_note = f" ({strategy})" if strategy != "detailed" else ""
+                                print(f"✅ Generated individual slide: {slide_data['title']}{strategy_note}")
+                            
+                            slide_generated = True
+                            break
                         else:
-                            print(f"Skipping {title} due to content repetition")
-                    else:
-                        print(f"Content validation failed for {title}")
+                            print(f"⚠️  Skipping {title} due to content repetition, trying different strategy...")
+                            continue
 
-                except json.JSONDecodeError:
-                    print(f"Failed to parse content for {title}")
+                except Exception as e:
+                    print(f"⚠️  Error generating individual slide '{title}' with {strategy} strategy: {e}")
                     continue
+            
+            if not slide_generated:
+                failed_slides.append(title)
+                print(f"❌ Failed to generate slide: {title}")
 
-            except Exception as e:
-                print(f"Error generating individual slide '{title}': {e}")
-                continue
+        # Report results
+        expected_slides = len([t for t in slide_titles if t.lower() not in ["title slide", "agenda", "references"]])
+        print(f"📊 Individual Generation Summary: {len(slides)}/{expected_slides} slides generated")
+        
+        if failed_slides:
+            print(f"⚠️  Failed slides: {', '.join(failed_slides)}")
 
         return slides
 
     except Exception as e:
-        print(f"Error in generate_slides_individually: {e}")
+        print(f"❌ Critical error in generate_slides_individually: {e}")
         return []
 
 
@@ -1026,6 +1071,9 @@ def generate_slide_content(outline: Dict, index_metadata: Dict) -> List[Dict]:
         allocation_plan = create_content_allocation_plan(outline, index_metadata)
 
         slides: List[Dict] = []
+        slide_titles = outline.get("slide_titles", [])
+        failed_slides = []  # Track slides that need recovery
+        
         if "error" in allocation_plan:
             print(f"Failed to create allocation plan: {allocation_plan['error']}")
             print("Falling back to individual slide generation...")
@@ -1033,9 +1081,6 @@ def generate_slide_content(outline: Dict, index_metadata: Dict) -> List[Dict]:
         else:
             content_plan = allocation_plan.get("content_plan", {})
             source_references = allocation_plan.get("source_references", [])
-
-            # Phase 2: Generate slides based on the allocation plan
-            slide_titles = outline.get("slide_titles", [])
             llm = get_openai_llm()
 
             # If the allocation plan produced no assignments, fallback strategy
@@ -1051,126 +1096,304 @@ def generate_slide_content(outline: Dict, index_metadata: Dict) -> List[Dict]:
                     # Get allocated insights for this slide
                     allocated_insights = content_plan.get(title, [])
 
+                    # NEW: Track this slide for potential recovery
+                    slide_success = False
+                    
                     if not allocated_insights:
-                        print(f"No allocated insights found for slide '{title}', skipping...")
-                        continue
+                        print(f"⚠️  No allocated insights found for slide '{title}', attempting recovery...")
+                        failed_slides.append({"title": title, "reason": "no_allocated_insights"})
+                    else:
+                        # Try to generate the slide with retry mechanism
+                        slide_success = _generate_single_slide_with_retry(
+                            title, allocated_insights, source_references, llm, slides
+                        )
+                        
+                        if not slide_success:
+                            failed_slides.append({"title": title, "reason": "generation_failed", "insights": allocated_insights})
 
-                    try:
-                        # Convert allocated insights into bullet points
-                        bullet_conversion_prompt = f"""
-                Convert these allocated insights into ultra-concise bullet points for slide "{title}".
-                
-                ALLOCATED INSIGHTS:
-                {chr(10).join([f"- {insight}" for insight in allocated_insights])}
-                
-                CRITICAL REQUIREMENTS:
-                - Focus on complete THOUGHTS, not complete sentences
-                - Maximum 15 words per bullet for complete ideas
-                - Use bullet-style phrasing: efficient and professional  
-                - NO markdown formatting (**, __, etc.) - plain text only
-                - Include specific data: numbers, percentages, companies, dates
-                - Each bullet must express one complete concept
-                
-                THOUGHT-BASED EXAMPLES:
-                "AI adoption: 250% increase across enterprise sectors"
-                "Microsoft: $10 billion strategic OpenAI partnership"  
-                "75% workforce adoption of daily AI tools"
-                "Healthcare productivity: 40% boost via AI automation"
-                
-                Return ONLY valid JSON in this exact format:
-                {{
-                    "title": "{title}",
-                    "bullets": [
-                        "Complete thought with specific data (max 15 words)",
-                        "Another key insight with metrics and context",
-                        "Third concept providing actionable information"
-                    ],
-                    "speaker_notes": "Detailed explanation of insights with context and supporting data. Include specific examples and implications. NO markdown formatting.",
-                    "slide_type": "content"
-                }}
-                
-                Convert all {len(allocated_insights)} insights into {len(allocated_insights)} bullets, max 15 words each.
-                """
+        # NEW: Recovery phase - ensure all expected slides are present
+        expected_slide_count = len([t for t in slide_titles if t.lower() not in ["title slide", "agenda", "references"]])
+        current_slide_count = len(slides)
+        
+        print(f"📊 Slide Generation Summary: {current_slide_count}/{expected_slide_count} slides generated")
+        
+        # Recover failed slides
+        if failed_slides:
+            print(f"🔄 Recovering {len(failed_slides)} failed slides...")
+            recovery_slides = _recover_failed_slides(failed_slides, outline, index_metadata)
+            slides.extend(recovery_slides)
+            print(f"✅ Recovery complete: {len(recovery_slides)} slides recovered")
 
-                        # Rate limiting for OpenAI API
-                        openai_limiter.wait_if_needed("openai")
-                        conversion_response = llm.invoke(bullet_conversion_prompt)
-
-                        try:
-                            slide_data = json.loads(conversion_response.content)
-                            slide_data["references"] = source_references
-
-                            # Validate content quality; accept minimal only when not strict
-                            if not validate_slide_content(slide_data) and getattr(settings, "strict_validation", False):
-                                print(
-                                    f"Content quality check failed for {title}, regenerating..."
-                                )
-                                raise json.JSONDecodeError("Quality check failed", "", 0)
-
-                            # Optimize title based on actual bullet content
-                            slide_data = optimize_slide_title(slide_data)
-                            slides.append(slide_data)
-
-                            # Show if title was optimized
-                            if slide_data.get("original_title") and slide_data.get(
-                                "original_title"
-                            ) != slide_data.get("title"):
-                                print(
-                                    f"✅ Generated slide: {title} → {slide_data['title']}"
-                                )
-                            else:
-                                print(f"✅ Generated slide: {slide_data['title']}")
-                        except json.JSONDecodeError:
-                            # Fallback: Create minimal slide with key insights
-                            print(
-                                f"JSON parsing failed for {title}, creating fallback slide..."
-                            )
-
-                            fallback_bullets = []
-                            for insight in allocated_insights[:3]:  # Max 3 bullets
-                                # Simple conversion: take first 15 words for complete thoughts
-                                words = insight.split()[:15]
-                                if len(words) >= 2:
-                                    fallback_bullets.append(" ".join(words))
-
-                            if fallback_bullets:
-                                slide_data = {
-                                    "title": title,
-                                    "bullets": fallback_bullets,
-                                    "speaker_notes": f"Key insights: {'. '.join(allocated_insights)}",
-                                    "slide_type": "content",
-                                    "references": source_references,
-                                }
-                                slides.append(slide_data)
-                                print(f"✅ Generated fallback slide: {title}")
-
-                    except Exception as e:
-                        print(f"Error generating content for slide '{title}': {e}")
-                        continue
-
-        # Final safety: ensure at least one slide for downstream steps in tests
+        # Final safety: ensure at least one slide exists
         if not slides:
-            print("No slides generated; creating a minimal fallback slide...")
+            print("❌ No slides generated; creating emergency fallback slide...")
             titles = outline.get("slide_titles", [])
             fallback_title = titles[1] if len(titles) > 1 else outline.get("topic", "Introduction")
-            slides = [
-                {
-                    "title": fallback_title,
-                    "bullets": ["AI transforms education", "Personalized learning"],
-                    "speaker_notes": "",
-                    "slide_type": "content",
-                    "references": [],
-                }
-            ]
+            slides = [_create_emergency_fallback_slide(fallback_title, outline.get("topic", ""))]
 
-        print(
-            f"Successfully generated {len(slides)} unique slides with no content repetition"
-        )
+        print(f"✅ Final result: {len(slides)} slides generated with comprehensive error recovery")
         return slides
 
     except Exception as e:
-        print(f"Error in generate_slide_content: {e}")
-        return []
+        print(f"❌ Critical error in generate_slide_content: {e}")
+        # Emergency fallback - create at least one slide
+        titles = outline.get("slide_titles", [])
+        fallback_title = titles[1] if len(titles) > 1 else outline.get("topic", "Introduction")
+        return [_create_emergency_fallback_slide(fallback_title, outline.get("topic", ""))]
+
+
+def _generate_single_slide_with_retry(title: str, allocated_insights: List[str], 
+                                    source_references: List[str], llm, slides: List[Dict],
+                                    max_retries: int = 2) -> bool:
+    """Generate a single slide with retry mechanism and comprehensive error handling.
+    
+    Returns True if slide was successfully generated, False otherwise.
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            # Adjust prompt complexity based on attempt
+            if attempt == 0:
+                # Standard prompt
+                bullet_conversion_prompt = f"""
+Convert these allocated insights into ultra-concise bullet points for slide "{title}".
+
+ALLOCATED INSIGHTS:
+{chr(10).join([f"- {insight}" for insight in allocated_insights])}
+
+CRITICAL REQUIREMENTS:
+- Focus on complete THOUGHTS, not complete sentences
+- Maximum 15 words per bullet for complete ideas
+- Use bullet-style phrasing: efficient and professional  
+- NO markdown formatting (**, __, etc.) - plain text only
+- Include specific data: numbers, percentages, companies, dates
+- Each bullet must express one complete concept
+
+THOUGHT-BASED EXAMPLES:
+"AI adoption: 250% increase across enterprise sectors"
+"Microsoft: $10 billion strategic OpenAI partnership"  
+"75% workforce adoption of daily AI tools"
+"Healthcare productivity: 40% boost via AI automation"
+
+Return ONLY valid JSON in this exact format:
+{{
+    "title": "{title}",
+    "bullets": [
+        "Complete thought with specific data (max 15 words)",
+        "Another key insight with metrics and context",
+        "Third concept providing actionable information"
+    ],
+    "speaker_notes": "Detailed explanation of insights with context and supporting data. Include specific examples and implications. NO markdown formatting.",
+    "slide_type": "content"
+}}
+
+Convert all {len(allocated_insights)} insights into {len(allocated_insights)} bullets, max 15 words each.
+"""
+            elif attempt == 1:
+                # Simplified prompt for retry
+                bullet_conversion_prompt = f"""
+Create simple bullet points for slide "{title}":
+
+CONTENT:
+{chr(10).join(allocated_insights)}
+
+Format as valid JSON:
+{{
+    "title": "{title}",
+    "bullets": ["Simple bullet 1", "Simple bullet 2", "Simple bullet 3"],
+    "speaker_notes": "Brief explanation of the content.",
+    "slide_type": "content"
+}}
+
+Keep it simple and ensure valid JSON format.
+"""
+            else:
+                # Final attempt - minimal prompt
+                bullet_conversion_prompt = f"""
+JSON only for "{title}":
+{{"title": "{title}", "bullets": ["{allocated_insights[0][:50] if allocated_insights else 'Key point'}"], "speaker_notes": "Supporting details.", "slide_type": "content"}}
+"""
+
+            # Rate limiting for OpenAI API
+            openai_limiter.wait_if_needed("openai")
+            conversion_response = llm.invoke(bullet_conversion_prompt)
+
+            # Parse JSON with error handling
+            slide_data = _parse_slide_json_safely(conversion_response.content, title)
+            
+            if slide_data:
+                slide_data["references"] = source_references
+
+                # Validate content quality; accept minimal only when not strict
+                if not validate_slide_content(slide_data) and getattr(settings, "strict_validation", False):
+                    if attempt < max_retries:
+                        print(f"⚠️  Content quality check failed for {title}, retrying (attempt {attempt + 1}/{max_retries + 1})...")
+                        continue
+                    else:
+                        print(f"⚠️  Content quality check failed for {title} after all retries, accepting minimal content...")
+
+                # Optimize title based on actual bullet content
+                slide_data = optimize_slide_title(slide_data)
+                slides.append(slide_data)
+
+                # Show if title was optimized
+                if slide_data.get("original_title") and slide_data.get("original_title") != slide_data.get("title"):
+                    print(f"✅ Generated slide: {title} → {slide_data['title']}{' (retry)' if attempt > 0 else ''}")
+                else:
+                    print(f"✅ Generated slide: {slide_data['title']}{' (retry)' if attempt > 0 else ''}")
+                
+                return True
+                
+        except Exception as e:
+            print(f"⚠️  Error generating slide '{title}' (attempt {attempt + 1}/{max_retries + 1}): {e}")
+            if attempt < max_retries:
+                continue
+    
+    print(f"❌ Failed to generate slide '{title}' after {max_retries + 1} attempts")
+    return False
+
+
+def _parse_slide_json_safely(content: str, title: str) -> Dict:
+    """Safely parse slide JSON with multiple fallback strategies."""
+    if not content or not content.strip():
+        print(f"⚠️  Empty response for slide '{title}'")
+        return None
+        
+    # Clean content
+    content = content.strip()
+    if content.startswith("```json"):
+        content = content[7:]
+    if content.endswith("```"):
+        content = content[:-3]
+    content = content.strip()
+    
+    # Attempt 1: Standard JSON parsing
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        pass
+    
+    # Attempt 2: Fix common JSON issues
+    try:
+        # Fix missing quotes and common formatting issues
+        import re
+        fixed_content = re.sub(r'(\w+):', r'"\1":', content)  # Add quotes to keys
+        fixed_content = re.sub(r': "([^"]*)"([^,}])', r': "\1",', fixed_content)  # Fix missing commas
+        return json.loads(fixed_content)
+    except json.JSONDecodeError:
+        pass
+    
+    # Attempt 3: Extract bullets from raw text using regex
+    try:
+        import re
+        bullets = re.findall(r'"([^"]*)"', content)  # Extract quoted strings
+        if bullets and len(bullets) >= 2:  # Need at least title and one bullet
+            return {
+                "title": title,
+                "bullets": bullets[1:4] if len(bullets) > 1 else [bullets[0]],  # Skip first (likely title)
+                "speaker_notes": f"Generated from partial content: {content[:200]}...",
+                "slide_type": "content"
+            }
+    except Exception:
+        pass
+    
+    print(f"❌ All JSON parsing attempts failed for slide '{title}'. Content: {content[:100]}...")
+    return None
+
+
+def _recover_failed_slides(failed_slides: List[Dict], outline: Dict, index_metadata: Dict) -> List[Dict]:
+    """Recover slides that failed during initial generation."""
+    recovery_slides = []
+    
+    # Retrieve index from store for emergency content generation
+    index_id = index_metadata.get("index_id")
+    index = _vector_index_store.get(index_id) if index_id else None
+    
+    for failed_slide in failed_slides:
+        title = failed_slide["title"]
+        reason = failed_slide["reason"]
+        
+        try:
+            print(f"🔄 Recovering slide '{title}' (reason: {reason})...")
+            
+            if reason == "no_allocated_insights":
+                # Generate new insights for this slide
+                recovery_slide = _generate_emergency_slide_content(title, outline.get("topic", ""), index)
+            else:
+                # Use existing insights but create fallback content
+                insights = failed_slide.get("insights", [])
+                recovery_slide = _create_fallback_slide_from_insights(title, insights)
+            
+            if recovery_slide:
+                recovery_slides.append(recovery_slide)
+                print(f"✅ Recovered slide: {title}")
+            
+        except Exception as e:
+            print(f"⚠️  Failed to recover slide '{title}': {e}")
+            # Last resort: create basic slide
+            recovery_slides.append(_create_emergency_fallback_slide(title, outline.get("topic", "")))
+    
+    return recovery_slides
+
+
+def _generate_emergency_slide_content(title: str, topic: str, index) -> Dict:
+    """Generate emergency slide content using the vector index."""
+    if index:
+        try:
+            query_engine = index.as_query_engine(similarity_top_k=3)
+            response = query_engine.query(f"Key information about {title} related to {topic}")
+            
+            # Extract key phrases from response
+            text = response.response
+            sentences = text.split('. ')[:3]  # Take first 3 sentences
+            bullets = [sentence.strip().rstrip('.') for sentence in sentences if sentence.strip()]
+            
+            return {
+                "title": title,
+                "bullets": bullets or [f"Key aspects of {title}", f"Important considerations for {topic}"],
+                "speaker_notes": text[:300] + "...",
+                "slide_type": "content",
+                "references": []
+            }
+        except Exception as e:
+            print(f"Emergency content generation failed: {e}")
+    
+    return _create_emergency_fallback_slide(title, topic)
+
+
+def _create_fallback_slide_from_insights(title: str, insights: List[str]) -> Dict:
+    """Create a fallback slide from existing insights."""
+    bullets = []
+    for insight in insights[:3]:  # Max 3 bullets
+        # Simple conversion: take first 15 words
+        words = insight.split()[:15]
+        if len(words) >= 2:
+            bullets.append(" ".join(words))
+    
+    if not bullets:
+        return _create_emergency_fallback_slide(title, "")
+        
+    return {
+        "title": title,
+        "bullets": bullets,
+        "speaker_notes": f"Key insights: {'. '.join(insights)}",
+        "slide_type": "content",
+        "references": []
+    }
+
+
+def _create_emergency_fallback_slide(title: str, topic: str) -> Dict:
+    """Create an emergency fallback slide when all else fails."""
+    return {
+        "title": title,
+        "bullets": [
+            f"Key aspects of {title}",
+            f"Important considerations for {topic}" if topic else "Relevant information and context",
+            "Summary of main points"
+        ],
+        "speaker_notes": f"This slide covers {title} with relevant context and supporting information.",
+        "slide_type": "content",
+        "references": []
+    }
 
 
 def validate_presentation_structure(slide_specs: List[Dict]) -> Tuple[bool, List[str]]:
