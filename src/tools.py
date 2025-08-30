@@ -1426,12 +1426,16 @@ def _enhance_slide_with_emergency_data(slide_data: Dict, title: str) -> Dict:
 
 
 def _parse_slide_json_safely(content: str, title: str) -> Dict:
-    """Safely parse slide JSON with multiple fallback strategies."""
+    """Safely parse slide JSON with comprehensive recovery mechanisms and structured logging."""
+    parsing_attempts = []
+    
     if not content or not content.strip():
-        print(f"⚠️  Empty response for slide '{title}'")
+        parsing_attempts.append({"strategy": "empty_check", "status": "failed", "reason": "Empty or None content"})
+        _log_json_parsing_failure(title, parsing_attempts)
         return None
         
     # Clean content
+    original_content = content
     content = content.strip()
     if content.startswith("```json"):
         content = content[7:]
@@ -1439,38 +1443,248 @@ def _parse_slide_json_safely(content: str, title: str) -> Dict:
         content = content[:-3]
     content = content.strip()
     
-    # Attempt 1: Standard JSON parsing
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        pass
+    parsing_attempts.append({"strategy": "content_cleaning", "status": "success", "cleaned_length": len(content)})
     
-    # Attempt 2: Fix common JSON issues
+    # Strategy 1: Standard JSON parsing
     try:
-        # Fix missing quotes and common formatting issues
-        import re
-        fixed_content = re.sub(r'(\w+):', r'"\1":', content)  # Add quotes to keys
-        fixed_content = re.sub(r': "([^"]*)"([^,}])', r': "\1",', fixed_content)  # Fix missing commas
-        return json.loads(fixed_content)
-    except json.JSONDecodeError:
-        pass
+        result = json.loads(content)
+        parsing_attempts.append({"strategy": "standard_json", "status": "success"})
+        _log_json_parsing_success(title, "standard_json", parsing_attempts)
+        return result
+    except json.JSONDecodeError as e:
+        parsing_attempts.append({"strategy": "standard_json", "status": "failed", "error": str(e), "position": getattr(e, 'pos', -1)})
     
-    # Attempt 3: Extract bullets from raw text using regex
+    # Strategy 2: JSON repair for common formatting issues
     try:
-        import re
-        bullets = re.findall(r'"([^"]*)"', content)  # Extract quoted strings
-        if bullets and len(bullets) >= 2:  # Need at least title and one bullet
-            return {
-                "title": title,
-                "bullets": bullets[1:4] if len(bullets) > 1 else [bullets[0]],  # Skip first (likely title)
-                "speaker_notes": f"Generated from partial content: {content[:200]}...",
-                "slide_type": "content"
-            }
-    except Exception:
-        pass
+        repaired_content = _repair_json_formatting(content)
+        result = json.loads(repaired_content)
+        parsing_attempts.append({"strategy": "json_repair", "status": "success", "repairs_applied": True})
+        _log_json_parsing_success(title, "json_repair", parsing_attempts)
+        return result
+    except json.JSONDecodeError as e:
+        parsing_attempts.append({"strategy": "json_repair", "status": "failed", "error": str(e)})
+    except Exception as e:
+        parsing_attempts.append({"strategy": "json_repair", "status": "failed", "error": f"Repair error: {str(e)}"})
     
-    print(f"❌ All JSON parsing attempts failed for slide '{title}'. Content: {content[:100]}...")
+    # Strategy 3: Partial JSON extraction using regex patterns
+    try:
+        partial_result = _extract_partial_json_content(content, title)
+        if partial_result:
+            parsing_attempts.append({"strategy": "partial_extraction", "status": "success", "bullets_found": len(partial_result.get("bullets", []))})
+            _log_json_parsing_success(title, "partial_extraction", parsing_attempts)
+            return partial_result
+        else:
+            parsing_attempts.append({"strategy": "partial_extraction", "status": "failed", "reason": "No extractable content"})
+    except Exception as e:
+        parsing_attempts.append({"strategy": "partial_extraction", "status": "failed", "error": str(e)})
+    
+    # Strategy 4: Structured text parsing (for when JSON is completely malformed)
+    try:
+        structured_result = _parse_structured_text(content, title)
+        if structured_result:
+            parsing_attempts.append({"strategy": "structured_text", "status": "success", "bullets_found": len(structured_result.get("bullets", []))})
+            _log_json_parsing_success(title, "structured_text", parsing_attempts)
+            return structured_result
+        else:
+            parsing_attempts.append({"strategy": "structured_text", "status": "failed", "reason": "No structured content found"})
+    except Exception as e:
+        parsing_attempts.append({"strategy": "structured_text", "status": "failed", "error": str(e)})
+    
+    # Strategy 5: Keyword-based content extraction (last resort)
+    try:
+        keyword_result = _extract_keywords_as_bullets(content, title)
+        if keyword_result:
+            parsing_attempts.append({"strategy": "keyword_extraction", "status": "success", "bullets_found": len(keyword_result.get("bullets", []))})
+            _log_json_parsing_success(title, "keyword_extraction", parsing_attempts)
+            return keyword_result
+        else:
+            parsing_attempts.append({"strategy": "keyword_extraction", "status": "failed", "reason": "No keywords extractable"})
+    except Exception as e:
+        parsing_attempts.append({"strategy": "keyword_extraction", "status": "failed", "error": str(e)})
+    
+    # All strategies failed
+    _log_json_parsing_failure(title, parsing_attempts, original_content)
     return None
+
+
+def _repair_json_formatting(content: str) -> str:
+    """Apply comprehensive JSON formatting repairs."""
+    import re
+    
+    repaired = content
+    
+    # Fix 1: Add quotes to unquoted keys
+    repaired = re.sub(r'(\w+)\s*:', r'"\1":', repaired)
+    
+    # Fix 2: Fix missing commas between key-value pairs
+    repaired = re.sub(r'"\s*([^,}\]]+)\s*"([^,}\]]+)', r'": \1",\2', repaired)
+    repaired = re.sub(r'}\s*{', r'}, {', repaired)
+    repaired = re.sub(r']\s*[^,}\]]', r'], ', repaired)
+    
+    # Fix 3: Fix trailing commas
+    repaired = re.sub(r',\s*}', '}', repaired)
+    repaired = re.sub(r',\s*]', ']', repaired)
+    
+    # Fix 4: Fix single quotes to double quotes
+    repaired = re.sub(r"'([^']*)'", r'"\1"', repaired)
+    
+    # Fix 5: Fix escaped characters
+    repaired = repaired.replace('\\"', '"').replace("\\'", "'")
+    
+    # Fix 6: Simple bullet array formatting (avoid complex lambda)
+    if 'bullets":' in repaired and '[' not in repaired[repaired.find('bullets":'):]:
+        # Simple fix for missing array brackets around bullets
+        repaired = re.sub(r'bullets":\s*"([^"]*)"', r'bullets": ["\1"]', repaired)
+    
+    return repaired
+
+
+def _extract_partial_json_content(content: str, title: str) -> Dict:
+    """Extract partial JSON content using regex patterns."""
+    import re
+    
+    # Extract quoted strings (potential bullets)
+    bullets = re.findall(r'"([^"]{10,})"', content)  # At least 10 chars to avoid keys
+    
+    # Extract title if present
+    title_matches = re.findall(r'"title":\s*"([^"]+)"', content, re.IGNORECASE)
+    extracted_title = title_matches[0] if title_matches else title
+    
+    # Extract speaker notes if present
+    notes_matches = re.findall(r'"speaker_notes?":\s*"([^"]+)"', content, re.IGNORECASE)
+    speaker_notes = notes_matches[0] if notes_matches else f"Partial content extracted from malformed JSON for {title}"
+    
+    # Filter bullets (remove likely keys and very short content)
+    filtered_bullets = []
+    skip_keywords = {'title', 'bullets', 'speaker_notes', 'slide_type', 'content', 'notes'}
+    
+    for bullet in bullets:
+        if (bullet.lower() not in skip_keywords and 
+            len(bullet.split()) >= 3 and  # At least 3 words
+            not bullet.lower().startswith('slide') and
+            not bullet.lower().startswith('content')):
+            filtered_bullets.append(bullet)
+    
+    if len(filtered_bullets) >= 1:
+        return {
+            "title": extracted_title,
+            "bullets": filtered_bullets[:4],  # Max 4 bullets
+            "speaker_notes": speaker_notes,
+            "slide_type": "content"
+        }
+    
+    return None
+
+
+def _parse_structured_text(content: str, title: str) -> Dict:
+    """Parse structured text that isn't proper JSON."""
+    import re
+    
+    bullets = []
+    
+    # Look for bullet patterns
+    bullet_patterns = [
+        r'[-*•]\s*(.+)',  # Traditional bullets
+        r'\d+\.\s*(.+)',  # Numbered lists
+        r'["\']([^"\']{10,})["\']',  # Quoted content
+        r'^([A-Z][^.!?]*[.!?])$',  # Sentence-like content
+    ]
+    
+    lines = content.split('\n')
+    for line in lines:
+        line = line.strip()
+        if not line or len(line) < 10:
+            continue
+            
+        for pattern in bullet_patterns:
+            matches = re.findall(pattern, line, re.MULTILINE)
+            for match in matches:
+                if len(match.split()) >= 3:  # At least 3 words
+                    bullets.append(match.strip())
+                    if len(bullets) >= 4:
+                        break
+        
+        if len(bullets) >= 4:
+            break
+    
+    # If no structured bullets found, try to split content into sentences
+    if not bullets:
+        sentences = re.split(r'[.!?]+', content)
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if len(sentence.split()) >= 5:  # At least 5 words for a meaningful sentence
+                bullets.append(sentence)
+                if len(bullets) >= 3:
+                    break
+    
+    if bullets:
+        return {
+            "title": title,
+            "bullets": bullets[:4],
+            "speaker_notes": f"Content parsed from structured text format for {title}",
+            "slide_type": "content"
+        }
+    
+    return None
+
+
+def _extract_keywords_as_bullets(content: str, title: str) -> Dict:
+    """Extract keywords and phrases as bullets (last resort)."""
+    import re
+    
+    # Extract meaningful phrases (3+ words)
+    words = re.findall(r'\b[A-Za-z]+(?:\s+[A-Za-z]+){2,}\b', content)
+    
+    # Filter and clean
+    meaningful_phrases = []
+    for phrase in words:
+        phrase = phrase.strip()
+        if (len(phrase) >= 15 and  # At least 15 characters
+            not phrase.lower().startswith('title') and
+            not phrase.lower().startswith('bullet') and
+            phrase.count(' ') >= 2):  # At least 3 words
+            meaningful_phrases.append(phrase)
+    
+    # If we have some phrases, create bullets
+    if meaningful_phrases:
+        return {
+            "title": title,
+            "bullets": meaningful_phrases[:3],  # Max 3 for keyword extraction
+            "speaker_notes": f"Keywords and phrases extracted from unstructured content for {title}",
+            "slide_type": "content"
+        }
+    
+    return None
+
+
+def _log_json_parsing_success(title: str, successful_strategy: str, attempts: list):
+    """Log successful JSON parsing with strategy details."""
+    print(f"✅ JSON parsed successfully for '{title}' using {successful_strategy} strategy")
+    if len(attempts) > 2:  # Only log details if multiple attempts were needed
+        failed_strategies = [att["strategy"] for att in attempts if att["status"] == "failed"]
+        print(f"   📊 Recovery after {len(failed_strategies)} failed attempts: {', '.join(failed_strategies)}")
+
+
+def _log_json_parsing_failure(title: str, attempts: list, original_content: str = ""):
+    """Log comprehensive JSON parsing failure details."""
+    print(f"❌ All JSON parsing strategies failed for slide '{title}'")
+    print(f"   📊 Attempted {len(attempts)} strategies:")
+    
+    for i, attempt in enumerate(attempts, 1):
+        status_icon = "✅" if attempt["status"] == "success" else "❌"
+        strategy = attempt["strategy"].replace("_", " ").title()
+        print(f"   {i}. {status_icon} {strategy}")
+        
+        if attempt["status"] == "failed" and "error" in attempt:
+            print(f"      Error: {attempt['error']}")
+        elif attempt["status"] == "failed" and "reason" in attempt:
+            print(f"      Reason: {attempt['reason']}")
+    
+    if original_content:
+        preview = original_content[:150].replace('\n', ' ')
+        print(f"   📝 Content preview: {preview}{'...' if len(original_content) > 150 else ''}")
+    
+    print(f"   💡 Consider improving LLM prompts to generate more consistent JSON format")
 
 
 def _recover_failed_slides(failed_slides: List[Dict], outline: Dict, index_metadata: Dict) -> List[Dict]:
