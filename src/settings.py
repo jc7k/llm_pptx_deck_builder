@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     phoenix_port: int = Field(
         default=6006, description="Phoenix server port"
     )
+    phoenix_grpc_port: int = Field(
+        default=4317, description="Phoenix gRPC port for trace collection"
+    )
     phoenix_collector_endpoint: Optional[str] = Field(
         default=None, 
         description="Phoenix collector endpoint (if using remote Phoenix)"

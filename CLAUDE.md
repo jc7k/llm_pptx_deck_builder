@@ -18,6 +18,9 @@ uv sync
 uv lock  # Create/update lockfile
 uv sync --frozen  # Install from lockfile
 
+# Start persistent Phoenix server (recommended for development)
+uv run python scripts/start_phoenix.py &
+
 # Run the application
 uv run python deck_builder_cli.py
 

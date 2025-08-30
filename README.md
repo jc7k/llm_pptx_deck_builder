@@ -9,6 +9,7 @@ AI-powered research presentation generator that creates professional PowerPoint 
 - **Professional Quality**: Complete thought validation, dynamic formatting, and citation tracking
 - **Template Support**: Works with custom PowerPoint templates for branding consistency
 - **Verbose Progress Tracking**: Real-time updates during the multi-minute generation process
+- **Phoenix Observability**: Full LLM tracing with persistent storage for performance analysis and debugging
 
 ## Quick Start
 
@@ -28,6 +29,11 @@ cp .env.example .env
 # Edit .env with your API keys:
 # BRAVE_API_KEY=brv-************************
 # OPENAI_API_KEY=sk-************************
+# 
+# Optional Phoenix settings (included in .env.example):
+# ENABLE_PHOENIX=true
+# PHOENIX_HOST=127.0.0.1
+# PHOENIX_PORT=6006
 ```
 
 ### Basic Usage
@@ -47,6 +53,31 @@ uv run python deck_builder_cli.py --topic "AI in Education" --lenient-validation
 # Or via env var
 DECK_STRICT=0 uv run python deck_builder_cli.py --topic "AI in Education"
 ```
+
+### Phoenix Observability Setup (Recommended)
+
+For comprehensive LLM performance monitoring and debugging:
+
+```bash
+# Start persistent Phoenix server (recommended for development)
+uv run python scripts/start_phoenix.py &
+
+# Phoenix UI will be available at: http://localhost:6006/
+# Traces persist across sessions in: ~/.phoenix_llm_pptx/
+
+# Now run your deck builder - all API calls are traced
+uv run python deck_builder_cli.py --topic "Your topic"
+
+# Analyze traces in Phoenix dashboard even after CLI exits
+open http://localhost:6006/
+```
+
+**Phoenix Features:**
+- **Persistent Traces**: All traces stored in SQLite, survive server restarts
+- **API Monitoring**: OpenAI, Brave Search, and LangChain call tracking
+- **Performance Analysis**: Latency, token usage, and cost tracking
+- **Error Debugging**: Full request/response logging for failed calls
+- **Quality Metrics**: Content validation and generation success rates
 
 ## Example Output
 

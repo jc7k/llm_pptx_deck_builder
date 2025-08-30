@@ -242,8 +242,9 @@ def create_vector_index(documents: List[Dict]) -> Dict:
         index_id = metadata["index_id"]
         _vector_index_store[index_id] = index
 
-        # Include direct index handle for consumers/tests that expect it
-        return {**metadata, "_index": index}
+        # Don't return the index object directly to avoid serialization issues
+        # The index is stored globally and can be accessed via index_id
+        return metadata
 
     except Exception as e:
         print(f"Error creating vector index: {e}")
@@ -262,12 +263,9 @@ def generate_outline(topic: str, index_metadata: Dict) -> Dict:
         JSON outline with slide titles and flow
     """
     try:
-        # Retrieve index from store with fallback to direct handle
+        # Retrieve index from store
         index_id = index_metadata.get("index_id")
-        direct_index = index_metadata.get("_index")
         index = _vector_index_store.get(index_id) if index_id else None
-        if index is None and direct_index is not None:
-            index = direct_index
         if index is None:
             return {"error": "Vector index not available"}
 
@@ -696,12 +694,9 @@ def create_content_allocation_plan(outline: Dict, index_metadata: Dict) -> Dict:
         Content allocation plan with unique insights per slide
     """
     try:
-        # Retrieve index from store, with fallback to direct handle (_index)
+        # Retrieve index from store
         index_id = index_metadata.get("index_id")
-        direct_index = index_metadata.get("_index")
         index = _vector_index_store.get(index_id) if index_id else None
-        if index is None and direct_index is not None:
-            index = direct_index
         if index is None:
             return {"error": "Vector index not available"}
 
@@ -886,12 +881,9 @@ def generate_slides_individually(outline: Dict, index_metadata: Dict) -> List[Di
         List of slide specifications
     """
     try:
-        # Retrieve index from store, with fallback to direct handle
+        # Retrieve index from store
         index_id = index_metadata.get("index_id")
-        direct_index = index_metadata.get("_index")
         index = _vector_index_store.get(index_id) if index_id else None
-        if index is None and direct_index is not None:
-            index = direct_index
         if index is None:
             return [{"error": "Vector index not available"}]
 

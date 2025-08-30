@@ -74,7 +74,7 @@ def configure_http_settings():
 
 
 def configure_phoenix():
-    """Configure and initialize Arize Phoenix observability."""
+    """Configure Arize Phoenix observability instrumentation."""
     if not PHOENIX_AVAILABLE:
         print("Warning: Phoenix is not available. Install with: uv sync")
         return None
@@ -83,18 +83,25 @@ def configure_phoenix():
         print("Phoenix observability is disabled via configuration")
         return None
     
+    # Set Phoenix working directory for consistent data storage
+    from pathlib import Path
+    phoenix_dir = Path.home() / ".phoenix_llm_pptx"
+    phoenix_dir.mkdir(exist_ok=True)
+    os.environ["PHOENIX_WORKING_DIR"] = str(phoenix_dir)
+    
     try:
-        # Launch Phoenix server if using local mode
-        if not settings.phoenix_collector_endpoint:
-            print(f"Starting Phoenix server at http://{settings.phoenix_host}:{settings.phoenix_port}")
-            session = px.launch_app(
-                host=settings.phoenix_host,
-                port=settings.phoenix_port
-            )
-            print(f"Phoenix UI available at: {session.url}")
-        else:
-            print(f"Using remote Phoenix collector at: {settings.phoenix_collector_endpoint}")
-            session = None
+        # Check if Phoenix server is running
+        import requests
+        try:
+            response = requests.get(f"http://{settings.phoenix_host}:{settings.phoenix_port}", timeout=2)
+            if response.status_code == 200:
+                print(f"✓ Connected to Phoenix server at http://{settings.phoenix_host}:{settings.phoenix_port}")
+            else:
+                print(f"⚠️  Phoenix server not responding at http://{settings.phoenix_host}:{settings.phoenix_port}")
+                print(f"💡 Start persistent server with: uv run python scripts/start_phoenix.py")
+        except requests.RequestException:
+            print(f"⚠️  Phoenix server not found at http://{settings.phoenix_host}:{settings.phoenix_port}")
+            print(f"💡 Start persistent server with: uv run python scripts/start_phoenix.py")
 
         # Configure OpenTelemetry tracing
         resource = Resource.create({
