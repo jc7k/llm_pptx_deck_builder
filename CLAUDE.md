@@ -24,6 +24,9 @@ uv run python scripts/start_phoenix.py &
 # Run the application
 uv run python deck_builder_cli.py
 
+# Stop Phoenix server when done
+uv run python scripts/stop_phoenix.py
+
 # Run with template support
 uv run python deck_builder_cli.py --template TEMPLATE.pptx
 ```

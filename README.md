@@ -70,6 +70,9 @@ uv run python deck_builder_cli.py --topic "Your topic"
 
 # Analyze traces in Phoenix dashboard even after CLI exits
 open http://localhost:6006/
+
+# Stop Phoenix server when done
+uv run python scripts/stop_phoenix.py
 ```
 
 **Phoenix Features:**
