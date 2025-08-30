@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+
+# Serena cache files
+.serena/
