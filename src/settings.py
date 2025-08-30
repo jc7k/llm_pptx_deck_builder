@@ -61,6 +61,28 @@ class Settings(BaseSettings):
         default=True, description="Verify SSL certificates for HTTP requests"
     )
 
+    # Phoenix Observability Configuration
+    enable_phoenix: bool = Field(
+        default=True, description="Enable Arize Phoenix observability and tracing"
+    )
+    phoenix_host: str = Field(
+        default="127.0.0.1", description="Phoenix server host"
+    )
+    phoenix_port: int = Field(
+        default=6006, description="Phoenix server port"
+    )
+    phoenix_collector_endpoint: Optional[str] = Field(
+        default=None, 
+        description="Phoenix collector endpoint (if using remote Phoenix)"
+    )
+    phoenix_project_name: str = Field(
+        default="llm-pptx-deck-builder", 
+        description="Project name for Phoenix tracing"
+    )
+    phoenix_enable_evaluations: bool = Field(
+        default=True, description="Enable Phoenix evaluations for content quality"
+    )
+
     class Config:
         """Pydantic configuration."""
 

@@ -8,6 +8,21 @@ from llama_index.embeddings.openai import OpenAIEmbedding
 from llama_index.core import Settings as LlamaIndexSettings
 from .settings import settings
 
+# Phoenix imports (conditional to handle missing dependencies gracefully)
+try:
+    import phoenix as px
+    from openinference.instrumentation.langchain import LangChainInstrumentor
+    from openinference.instrumentation.llama_index import LlamaIndexInstrumentor
+    from openinference.instrumentation.openai import OpenAIInstrumentor
+    from opentelemetry import trace as otel_trace
+    from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+    from opentelemetry.sdk import trace as trace_sdk
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor
+    from opentelemetry.sdk.resources import Resource
+    PHOENIX_AVAILABLE = True
+except ImportError:
+    PHOENIX_AVAILABLE = False
+
 
 def get_openai_llm(model: Optional[str] = None, temperature: float = 0.1) -> ChatOpenAI:
     """Get configured OpenAI LLM for LangChain."""
@@ -58,6 +73,77 @@ def configure_http_settings():
         os.environ["USER_AGENT"] = settings.user_agent
 
 
+def configure_phoenix():
+    """Configure and initialize Arize Phoenix observability."""
+    if not PHOENIX_AVAILABLE:
+        print("Warning: Phoenix is not available. Install with: uv sync")
+        return None
+        
+    if not settings.enable_phoenix:
+        print("Phoenix observability is disabled via configuration")
+        return None
+    
+    try:
+        # Launch Phoenix server if using local mode
+        if not settings.phoenix_collector_endpoint:
+            print(f"Starting Phoenix server at http://{settings.phoenix_host}:{settings.phoenix_port}")
+            session = px.launch_app(
+                host=settings.phoenix_host,
+                port=settings.phoenix_port
+            )
+            print(f"Phoenix UI available at: {session.url}")
+        else:
+            print(f"Using remote Phoenix collector at: {settings.phoenix_collector_endpoint}")
+            session = None
+
+        # Configure OpenTelemetry tracing
+        resource = Resource.create({
+            "service.name": settings.phoenix_project_name,
+            "service.version": "1.0.0",
+        })
+
+        if settings.phoenix_collector_endpoint:
+            # Use remote Phoenix collector
+            exporter = OTLPSpanExporter(
+                endpoint=settings.phoenix_collector_endpoint,
+                headers={}
+            )
+        else:
+            # Use local Phoenix server
+            exporter = OTLPSpanExporter(
+                endpoint=f"http://{settings.phoenix_host}:{settings.phoenix_port}/v1/traces",
+                headers={}
+            )
+
+        tracer_provider = trace_sdk.TracerProvider(resource=resource)
+        span_processor = BatchSpanProcessor(exporter)
+        tracer_provider.add_span_processor(span_processor)
+        otel_trace.set_tracer_provider(tracer_provider)
+
+        # Initialize instrumentors for automatic tracing
+        print("Initializing Phoenix instrumentors...")
+        
+        # OpenAI instrumentation
+        OpenAIInstrumentor().instrument()
+        print("✓ OpenAI instrumentation enabled")
+        
+        # LangChain instrumentation  
+        LangChainInstrumentor().instrument()
+        print("✓ LangChain instrumentation enabled")
+        
+        # LlamaIndex instrumentation
+        LlamaIndexInstrumentor().instrument()
+        print("✓ LlamaIndex instrumentation enabled")
+        
+        print(f"✓ Phoenix observability initialized successfully!")
+        return session
+        
+    except Exception as e:
+        print(f"Warning: Failed to initialize Phoenix: {e}")
+        print("Continuing without Phoenix observability...")
+        return None
+
+
 def get_brave_search_headers() -> dict:
     """Get headers for Brave Search API."""
     return {
@@ -87,6 +173,8 @@ if os.environ.get("DECK_BUILDER_AUTOINIT", "1") == "1":
         validate_api_keys()
         configure_llamaindex_settings()
         configure_langsmith()
+        configure_phoenix()
+        configure_http_settings()
     except Exception as e:
         print(f"Warning: Failed to initialize dependencies: {e}")
         print("Please check your environment configuration.")
