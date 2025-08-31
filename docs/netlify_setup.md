@@ -30,6 +30,7 @@ Add these under Site settings → Environment variables:
 ## 5) Deploy
 - Push the feature branch and open a PR. Netlify will create a Deploy Preview.
 - Use the preview URL to test the flow: enter a topic → submit → watch status → download PPTX.
+  - Note: The build job itself (GitHub Actions) triggers via `repository_dispatch`, which only runs workflows present on the default branch. The UI will deploy on a PR, but job execution will work after this PR is merged into your default branch (e.g., `main`).
 
 ## 6) Troubleshooting
 - 401/403 from functions: confirm `GITHUB_TOKEN` scope, owner/repo names, and that the workflow file exists on the target branch.
