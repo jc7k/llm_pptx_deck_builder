@@ -1,0 +1,8 @@
+{
+  "name": "deck-builder-functions",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "adm-zip": "^0.5.10"
+  }
+}

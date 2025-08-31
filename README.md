@@ -54,6 +54,26 @@ uv run python deck_builder_cli.py --topic "AI in Education" --lenient-validation
 DECK_STRICT=0 uv run python deck_builder_cli.py --topic "AI in Education"
 ```
 
+## Web UI (Netlify, Free)
+
+Host a simple web UI on Netlify Starter that triggers deck builds using GitHub Actions. Users bring their own API keys (OpenAI + Brave) per request; keys are never stored or logged by the app.
+
+- How it works: static React app + Netlify Functions (dispatch GitHub Action) + GitHub Actions (runs Python CLI) + GitHub Artifacts (PPTX download).
+- Security: Keys are entered in the browser as password fields, sent once to the Netlify Function to launch the job, masked in workflow logs, and cleared from UI memory immediately after dispatch.
+
+Getting started:
+- Read the setup guide: docs/netlify_setup.md
+- Architecture, plan, and flow details: docs/netlify_web_ui.md
+
+Local dev (frontend only):
+```bash
+cd web && npm install && npm run dev
+```
+
+Deploy (Netlify):
+- Add Netlify env vars: `GITHUB_TOKEN`, `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_WORKFLOW=build_deck.yml`, `GITHUB_BRANCH=main`.
+- Push a branch and open a PR to get a Deploy Preview. Use the preview URL to submit a topic and your API keys, then download the generated PPTX when complete.
+
 ### Phoenix Observability Setup (Recommended)
 
 For comprehensive LLM performance monitoring and debugging:

@@ -1,0 +1,10 @@
+[build]
+  command = "npm --prefix web install && npm --prefix web run build"
+  publish = "web/dist"
+  functions = "netlify/functions"
+  [build.environment]
+    NODE_VERSION = "18"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = []

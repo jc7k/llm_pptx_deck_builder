@@ -1,0 +1,61 @@
+name: Build Deck
+
+run-name: deck-${{ github.event.client_payload.request_id }}
+
+on:
+  repository_dispatch:
+    types: [deck-request]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Mask tokens
+        run: |
+          echo "::add-mask::${{ github.event.client_payload.openai_api_key }}"
+          echo "::add-mask::${{ github.event.client_payload.brave_api_key }}"
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Generate deck
+        env:
+          OPENAI_API_KEY: ${{ github.event.client_payload.openai_api_key }}
+          BRAVE_API_KEY: ${{ github.event.client_payload.brave_api_key }}
+        run: |
+          set -euxo pipefail
+          uv run python deck_builder_cli.py --topic "${{ github.event.client_payload.topic }}" --max-slides ${{ github.event.client_payload.slide_count }} --verbose
+
+      - name: Collect artifact
+        id: collect
+        run: |
+          set -euxo pipefail
+          mkdir -p artifact
+          latest=$(ls -t output/*.pptx | head -n 1)
+          if [ -z "${latest:-}" ]; then
+            echo "No PPTX found in output/" >&2
+            exit 1
+          fi
+          cp "$latest" "artifact/deck-${{ github.event.client_payload.request_id }}.pptx"
+          echo "artifact_path=artifact/deck-${{ github.event.client_payload.request_id }}.pptx" >> "$GITHUB_OUTPUT"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deck-${{ github.event.client_payload.request_id }}
+          path: ${{ steps.collect.outputs.artifact_path }}
+          if-no-files-found: error
